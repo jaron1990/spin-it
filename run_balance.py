@@ -1,10 +1,92 @@
 import numpy as np
 # from utils.rujum_utils import get_shapes, get_safe_zone, update_center_of_mass, publish_results
-from trimesh import Scene
+from trimesh import Scene, Trimesh
 import os
 import utils
 import balance
+import itertools
+import time
+import datetime
 
+
+class octree_cell:
+    def __init__(self, point_start, size, beta_val, level):
+        assert(len(point_start)==3 and len(size)==3 and ((beta_val>=0 and beta_val<=1) or beta_val==-1))
+        self.point_start=point_start
+        self.size = size
+        self.point_end=point_start + size
+        self.beta_val=beta_val
+        self.level = level
+        combinations = list(itertools.product([0, 1], repeat=3))
+        self.corners = []
+        for comb in combinations:
+            corner = point_start + size*comb
+            self.corners.append(corner)
+
+    def split_cell(self):
+        if(self.level >8): #cell level limit
+            return False 
+        new_cells = []
+        combinations = list(itertools.product([0, 1], repeat=3))
+        for comb in combinations:
+            start_step = comb*self.size/2
+            new_cell = octree_cell(self.point_start + start_step, self.size/2, self.beta_val, self.level+1)
+            new_cells.append(new_cell)
+        return new_cells
+
+##TODO - check if there's a different way... this MIGHT be buggy
+#returns 1 if inside, 0 if outside, -1 if partial
+def cell_inside_mesh(cell: octree_cell, shape: Trimesh):
+    inside = shape.contains(cell.corners + [(cell.point_start+cell.size/2)])
+    if (inside==True).all():    return 1
+    if (inside==False).all():   return 0
+    else:                       return -1
+
+class octree_graph:
+    def __init__(self, shape: Trimesh):
+        max_indices = np.array(np.max(shape.vertices, axis=0))
+        min_indices = np.array(np.min(shape.vertices, axis=0))
+        bbox = np.array([min_indices, max_indices])
+
+        octree_cells = []
+        octree_first_cell = octree_cell(point_start=min_indices, size=max_indices-min_indices, beta_val=-1, level=0)
+        remaining_cells_to_split = [octree_first_cell]
+        current_level=0
+       
+        start = datetime.datetime.now()
+        level_start = datetime.datetime.now()
+
+        while len(remaining_cells_to_split) > 0:
+            current_cell = remaining_cells_to_split.pop(0)
+            if current_cell.level>current_level:
+                end = datetime.datetime.now()
+                print(f"finished level {current_level}, {len(remaining_cells_to_split)} remained to split, {len(octree_cells)} already in octree")
+                current_level = current_cell.level
+                print(f"level took {(end-level_start).total_seconds()} seconds")
+                level_start = datetime.datetime.now()
+
+            cell_in_mesh = cell_inside_mesh(current_cell, shape)
+            if cell_in_mesh==-1:
+                splitted = current_cell.split_cell()
+                if splitted==False:
+                    octree_cells.append(current_cell) #although can't decide if in or out - add because of last level
+                else:
+                    remaining_cells_to_split += splitted
+            else:
+                current_cell.beta_val=cell_in_mesh
+                octree_cells.append(current_cell)
+        end = datetime.datetime.now()
+
+        print(f" \
+                finished level {current_level}, \
+                {len(remaining_cells_to_split)} remained to split, \
+                {len(octree_cells)} already in octree")
+        print(f"level took {(end-level_start).total_seconds()} seconds")
+
+        print(f"finished building octree. took {(end-start).total_seconds()} seconds")
+            
+
+# def build_octree()
 
 def rujum_balance(src_dir, results_dir):
     """
@@ -15,7 +97,12 @@ def rujum_balance(src_dir, results_dir):
     """
     scene = Scene()
     shape = utils.get_shape(src_dir)  # list of shapes sorted from bottom to top
+
+    # cell = octree_cell(np.array([1,-20,17]), np.array([0.1,0.1,0.1]), 0.2, 0)
+    # cell_inside_mesh(cell, shape)
     # select spin axis - point
+    graph = octree_graph(shape)
+
     balance.balance(shape) #, spin_axis)
     
     # cur_center_of_mass = {'location': np.array([0., 0., 0.]), 'mass': 0.}
@@ -42,8 +129,9 @@ def test_res(scene):
 
 
 if __name__ == '__main__':
-    stl_path = "resources/Orangutan-man_mini_figures_1.stl"
+    stl_path = "resources/GiantToad.stl"
     # src_dir = os.path.join('resources', rujum_name)
     results_dir = os.path.join('results', "orang")
+
     rujum_balance(stl_path, results_dir)
 

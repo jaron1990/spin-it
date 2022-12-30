@@ -52,18 +52,25 @@ def balance(shape): #, safe_zone, cumulative_center_of_mass, should_carve=True, 
     
     from copy import deepcopy
     vox = voxel_grid.encoding.dense
-    vox_edit = deepcopy(vox)
-    x,y,z = vox_edit.shape
-    vox_edit[:x//2] = False
+    vox_full = deepcopy(vox)
+    x,y,z = vox_full.shape
+    vox_full[:x//2] = False
+
+    voxel_grid.hollow()
+    vox = voxel_grid.encoding.dense
+    vox_hollow = deepcopy(vox)
+    x,y,z = vox_hollow.shape
+    vox_hollow[:x//2] = False
+
     # voxel_grid.encoding.dense = vox
     from trimesh.voxel.ops import matrix_to_marching_cubes
-    test_half = matrix_to_marching_cubes(vox_edit)
-    test_full = matrix_to_marching_cubes(vox)
+    test_hollow = matrix_to_marching_cubes(vox_hollow)
+    test_full = matrix_to_marching_cubes(vox_full)
     from trimesh.exchange.stl import export_stl
-    half = export_stl(test_half)
+    hollow = export_stl(test_hollow)
     full = export_stl(test_full)
-    f = open('test_half.stl', 'wb')
-    f.write(half)
+    f = open('test_hollow.stl', 'wb')
+    f.write(hollow)
     f.close()
     f = open('test_full.stl', 'wb')
     f.write(full)
