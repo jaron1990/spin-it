@@ -22,11 +22,18 @@ class octree_node:
         self.point_start = point_start
         self.size = size
         self.point_end = self.point_start+self.size
+        self.center = self.point_start+self.size/2
 
         self.combinations = list(itertools.product([0, 1], repeat=3))
         self.corners = self.point_start + self.size*self.combinations
 
+        start_inside = datetime.datetime.now()
         is_inside = self.is_inside_mesh(shape)
+        end_inside = datetime.datetime.now()
+
+        self.time_inside = end_inside-start_inside
+        self.time_split = datetime.timedelta(0)
+        start_split = datetime.datetime.now()
 
         if is_inside==1:
             self.beta_val=1
@@ -52,12 +59,27 @@ class octree_node:
                 for i in range(8):
                     self.children.append(octree_node(point_start=self.children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level))
                     self.deepest_level = max(self.deepest_level, self.children[-1].deepest_level)
+                end_split = datetime.datetime.now()
+                self.time_split = end_split-start_split
 
         end = datetime.datetime.now()
 
         if(self.current_level <=2):
-            print(f"finished building tree of level {self.current_level}. deepest level was {self.deepest_level}")
-            print(f"level took {(end-start).total_seconds()} seconds")
+            start_checks = datetime.datetime.now()
+            leafs=self.num_of_leafs()
+            print(f"finished building tree of level {self.current_level}")
+            print(f"deepest level was {self.deepest_level}")
+            print(f"sum_of_sizes = {self.sum_of_volumes():.02f}")
+            print(f"num_of_leafs = {leafs}")
+            print(f"level took {(end-start).total_seconds():.02f} seconds")
+            print(f"mean_time_per_leaf= {((end-start).total_seconds()/leafs):.02f} seconds")
+            print(f"time_inside {self.sum_of_time_inside().total_seconds():.02f} seconds")
+            print(f"time_split {self.sum_of_time_split().total_seconds():.02f} seconds")
+            end_checks = datetime.datetime.now()
+            print(f"prints time took {(end_checks-start_checks).total_seconds():.02f} seconds")
+
+            print()
+            
             
     def build_octree_node(self, i):
         child = octree_node(point_start=self.children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level)
@@ -88,6 +110,45 @@ class octree_node:
         if (inside==False).all():   return 0
         else:                       return -1
 
+    def is_leaf(self):
+        return self.children==None
+
+    def sum_of_volumes(self):
+        if(self.is_leaf()):
+            return self.size.prod()
+        else:
+            res = 0
+            for child in self.children:
+                res += child.sum_of_volumes()
+            return res
+
+    def sum_of_time_inside(self):
+        if(self.is_leaf()):
+            return self.time_inside
+        else:
+            res = datetime.timedelta(0)
+            for child in self.children:
+                res += child.sum_of_time_inside()
+            return res
+
+    def sum_of_time_split(self):
+        if(self.is_leaf()):
+            return self.time_split
+        else:
+            res = datetime.timedelta(0)
+            for child in self.children:
+                res += child.sum_of_time_split()
+            return res
+
+    def num_of_leafs(self):
+        if(self.is_leaf()):
+            return 1
+        else:
+            res = 0
+            for child in self.children:
+                res += child.num_of_leafs()
+            return res
+
 def rujum_balance(src_dir, results_dir):
     """
     Balance a given rujum (stack of stones) based on the "make it stand" paper.
@@ -104,10 +165,13 @@ def rujum_balance(src_dir, results_dir):
   
     max_indices = np.array(np.max(shape.vertices, axis=0))
     min_indices = np.array(np.min(shape.vertices, axis=0))
-    
-    graph = octree_node(point_start=min_indices, size=max_indices-min_indices, shape=shape, max_level=4)
+    size = max_indices-min_indices
+    volume = size.prod()
+    print(f"volume is {volume}")
 
-    balance.balance(shape) #, spin_axis)
+    graph = octree_node(point_start=min_indices, size=max_indices-min_indices, shape=shape, max_level=5)
+
+    # balance.balance(shape) #, spin_axis)
     
     # cur_center_of_mass = {'location': np.array([0., 0., 0.]), 'mass': 0.}
     # carved_shapes = []
