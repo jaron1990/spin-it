@@ -7,6 +7,7 @@ import balance
 import itertools
 import time
 import datetime
+import multiprocessing as mp
 
 
 class octree_cell:
@@ -24,8 +25,6 @@ class octree_cell:
             self.corners.append(corner)
 
     def split_cell(self):
-        if(self.level >8): #cell level limit
-            return False 
         new_cells = []
         combinations = list(itertools.product([0, 1], repeat=3))
         for comb in combinations:
@@ -43,50 +42,56 @@ def cell_inside_mesh(cell: octree_cell, shape: Trimesh):
     else:                       return -1
 
 class octree_graph:
-    def __init__(self, shape: Trimesh):
+    def __init__(self, shape: Trimesh, max_level=7):
+        self.max_level=max_level
         max_indices = np.array(np.max(shape.vertices, axis=0))
         min_indices = np.array(np.min(shape.vertices, axis=0))
         bbox = np.array([min_indices, max_indices])
 
         octree_cells = []
-        octree_first_cell = octree_cell(point_start=min_indices, size=max_indices-min_indices, beta_val=-1, level=0)
-        remaining_cells_to_split = [octree_first_cell]
+        octree_root_cell = octree_cell(point_start=min_indices, size=max_indices-min_indices, beta_val=-1, level=0)
+        self.remaining_cells_to_split = [octree_root_cell]
         current_level=0
        
         start = datetime.datetime.now()
         level_start = datetime.datetime.now()
 
-        while len(remaining_cells_to_split) > 0:
-            current_cell = remaining_cells_to_split.pop(0)
+        while len(self.remaining_cells_to_split) > 0:
+            current_cell = self.remaining_cells_to_split.pop(0)
             if current_cell.level>current_level:
                 end = datetime.datetime.now()
-                print(f"finished level {current_level}, {len(remaining_cells_to_split)} remained to split, {len(octree_cells)} already in octree")
+                print(f"finished level {current_level}, {len(self.remaining_cells_to_split)} remained to split, {len(octree_cells)} already in octree")
                 current_level = current_cell.level
                 print(f"level took {(end-level_start).total_seconds()} seconds")
                 level_start = datetime.datetime.now()
 
-            cell_in_mesh = cell_inside_mesh(current_cell, shape)
-            if cell_in_mesh==-1:
-                splitted = current_cell.split_cell()
-                if splitted==False:
-                    octree_cells.append(current_cell) #although can't decide if in or out - add because of last level
-                else:
-                    remaining_cells_to_split += splitted
-            else:
-                current_cell.beta_val=cell_in_mesh
-                octree_cells.append(current_cell)
+
+            splitted = self.split_if_needed(current_cell, shape, octree_cells)
+
+            
         end = datetime.datetime.now()
 
         print(f" \
                 finished level {current_level}, \
-                {len(remaining_cells_to_split)} remained to split, \
+                {len(self.remaining_cells_to_split)} remained to split, \
                 {len(octree_cells)} already in octree")
         print(f"level took {(end-level_start).total_seconds()} seconds")
 
         print(f"finished building octree. took {(end-start).total_seconds()} seconds")
             
+    def split_if_needed(self, cell, shape, octree_cells_list):
+        if(cell.level>=self.max_level):
+            cell.beta_val=-1
+            octree_cells_list.append(cell)
+            return
 
-# def build_octree()
+        cell_in_mesh = cell_inside_mesh(cell, shape)
+        if cell_in_mesh==-1:
+            self.remaining_cells_to_split += cell.split_cell()
+        else:
+            cell.beta_val=cell_in_mesh
+            octree_cells_list.append(cell)
+
 
 def rujum_balance(src_dir, results_dir):
     """
@@ -101,6 +106,7 @@ def rujum_balance(src_dir, results_dir):
     # cell = octree_cell(np.array([1,-20,17]), np.array([0.1,0.1,0.1]), 0.2, 0)
     # cell_inside_mesh(cell, shape)
     # select spin axis - point
+  
     graph = octree_graph(shape)
 
     balance.balance(shape) #, spin_axis)
