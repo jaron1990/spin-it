@@ -1,3 +1,4 @@
+import operator
 from trimesh import Trimesh
 import numpy as np
 import itertools
@@ -20,39 +21,37 @@ class Octree:
     
     def _build_init_res(self, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
-        cell_x, cell_y, cell_z = (vertices.max(axis=0) - vertices.min(axis=0)) / self._init_res
+        cell_size = (vertices.max(axis=0) - vertices.min(axis=0)) / self._init_res
         
-        leaf_list = []
-        for i, j, k in itertools.product(np.arange(self._init_res), repeat=3):
-            point_start = (i * cell_x, j * cell_y, k * cell_z)
-            point_end = ((i + 1) * cell_x, (j + 1) * cell_y, (k + 1) * cell_z)
+        leaves_list = self._create_leaves_list(itertools.product(np.arange(self._init_res), repeat=3), (0, 0, 0), 
+                                               cell_size, vertices, 0, None)
+        return pd.DataFrame.from_records(leaves_list)
+    
+    def _create_leaves_list(self, iterator: itertools.product, init_point: tuple[float, float, float], 
+                            cell_size:tuple[float, float, float], vertices: np.ndarray, lvl: int, father_idx: int | None
+                            ) -> list[dict[str, int | tuple[float,float,float]]]:
+        leaves_list = []
+        for idxs in iterator:
+            point_start = tuple(map(operator.mul(idxs, cell_size)))
+            point_start = tuple(map(operator.add, point_start, init_point))
+            
+            point_end = tuple(map(operator.add, point_start, (1,) * 3))
+            point_end = tuple(map(operator.mul(idxs, cell_size)))
+            point_end = tuple(map(operator.add, point_start, init_point))
+            
             loc = self._calc_loc(vertices, point_start, point_end)
-            leaf = {"level": 0, "M": 0,
-                    "bbox_start": point_start,
-                    "bbox_end": point_end,
-                    "loc": loc, "father_idx": None}
+            leaf = {"level": lvl, "M": 0, "bbox_start": point_start, "bbox_end": point_end, "loc": loc, 
+                    "father_idx": father_idx}
             leaf.update({f"child{idx}": None for idx in range(8)})
-            leaf_list.append(leaf)
-        return pd.DataFrame.from_records(leaf_list)
+            leaves_list.append(leaf)
+        return leaves_list
     
     def _split_leaves(self, lvl, leaves_df: pd.DataFrame, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
         for leaf in leaves_df:
-            cell_x = (leaf["x1"] - leaf["x0"]) / 2
-            cell_y = (leaf["y1"] - leaf["y0"]) / 2
-            cell_z = (leaf["z1"] - leaf["z0"]) / 2
-            
-            new_leaves = []
-            for i, j, k in itertools.product([0, 1], repeat=3):
-                point_start = (leaf["x0"] + i * cell_x, leaf["y0"] + j * cell_y, leaf["z0"] + k * cell_z)
-                point_end = (leaf["x0"] + (i + 1) * cell_x, leaf["y0"] + (j + 1) * cell_y, leaf["z0"] + (k + 1) * cell_z)
-                loc = self._calc_loc(vertices, point_start, point_end)
-                new_leaf = {"level": lvl, "M": 0,
-                            "bbox_start": point_start,
-                            "bbox_end": point_end,
-                            "loc": loc, "father_idx": new_leaf.index}
-                new_leaf.update({f"child{idx}": None for idx in range(8)})
-                new_leaves.append(new_leaf)
+            cell_size = (leaf["bbox_end"] - leaf["bbox_start"]) / 2
+            self._create_leaves_list(itertools.product([0, 1], repeat=3), leaf["bbox_start"], cell_size, vertices, lvl, 
+                                     leaf.index)
             # update father's children
             # update df
             # pd.DataFrame.from_records(new_leaves)
