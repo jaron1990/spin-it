@@ -8,7 +8,14 @@ import itertools
 import time
 import datetime
 from multiprocessing import Pool
+from igl import fast_winding_number_for_meshes
 
+from enum import Enum
+class Location(Enum):
+    INSIDE = 1
+    OUTSIDE = 2
+    BOUNDARY = 3
+    UNKNOWN = 0
 
 class octree_node:
     def __init__(self, point_start, size, shape: Trimesh, current_level = 0, max_level=7):
@@ -17,7 +24,7 @@ class octree_node:
         self.shape=shape
         self.current_level  = current_level
         self.max_level      = max_level
-        self.deepest_level = current_level
+        self.location = Location.UNKNOWN
 
         self.point_start = point_start
         self.size = size
@@ -27,118 +34,88 @@ class octree_node:
         self.combinations = list(itertools.product([0, 1], repeat=3))
         self.corners = self.point_start + self.size*self.combinations
 
-        start_inside = datetime.datetime.now()
-        is_inside = self.is_inside_mesh(shape)
-        end_inside = datetime.datetime.now()
-
-        self.time_inside = end_inside-start_inside
-        self.time_split = datetime.timedelta(0)
-        start_split = datetime.datetime.now()
-
-        if is_inside==1:
-            self.beta_val=1
+        if current_level>=max_level:
             self.children=None
-        elif is_inside==0:
-            self.beta_val=0
-            self.children=None
-        else:
-            self.beta_val=-1
-            if current_level>=max_level:
-                self.children=None
+            if self.contains_vertices():
+                self.location=Location.BOUNDARY
             else:
-                self.children_starts = self.point_start + self.size/2*self.combinations
+                if self.is_inside:
+                    self.location=Location.INSIDE
+                else:
+                    self.location=Location.OUTSIDE
+        else:
+            to_split = self.contains_vertices()
 
-                # # for parallel (not working because of some issue in trimesh):
-                # with Pool(8) as p:    
-                #     self.children = p.map(self.build_octree_node, range(8))
-                #     for child in self.children:
-                #         self.deepest_level = max(self.deepest_level, child.deepest_level)
-
-                # for series:
+            if to_split:
+                self.location = Location.BOUNDARY
+                children_starts = self.point_start + self.size/2*self.combinations
                 self.children = []
                 for i in range(8):
-                    self.children.append(octree_node(point_start=self.children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level))
-                    self.deepest_level = max(self.deepest_level, self.children[-1].deepest_level)
-                end_split = datetime.datetime.now()
-                self.time_split = end_split-start_split
+                    self.children.append(octree_node(point_start=children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level))
+
+            else:
+                self.children=None
+                if self.is_inside():
+                    self.location=Location.INSIDE
+                else:
+                    self.location=Location.OUTSIDE
 
         end = datetime.datetime.now()
 
-        if(self.current_level <=2):
+        if(self.current_level <=1):
+            locations = self.count_locations()
             start_checks = datetime.datetime.now()
             leafs=self.num_of_leafs()
+            inside=locations[0]
+            outside=locations[1]
+            boundary=locations[2]
             print(f"finished building tree of level {self.current_level}")
-            print(f"deepest level was {self.deepest_level}")
-            print(f"sum_of_sizes = {self.sum_of_volumes():.02f}")
             print(f"num_of_leafs = {leafs}")
-            print(f"level took {(end-start).total_seconds():.02f} seconds")
-            print(f"mean_time_per_leaf= {((end-start).total_seconds()/leafs):.02f} seconds")
-            print(f"time_inside {self.sum_of_time_inside().total_seconds():.02f} seconds")
-            print(f"time_split {self.sum_of_time_split().total_seconds():.02f} seconds")
-            end_checks = datetime.datetime.now()
-            print(f"prints time took {(end_checks-start_checks).total_seconds():.02f} seconds")
+            print(f"num_inside = {inside}")
+            print(f"num_outside = {outside}")
+            print(f"num_boundary = {boundary}")
+            print(f"level took {(end-start).total_seconds()} seconds")
 
             print()
-            
-            
-    def build_octree_node(self, i):
-        child = octree_node(point_start=self.children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level)
-        print(self.children_starts[i])
-        print(self.size/2)
-        print(self.current_level+1, self.max_level)
-        print(f"is child inside mesh? {child.is_inside_mesh(self.shape)}")
-        return child
 
-    def split_if_needed(self, cell, shape, octree_cells_list):
-        if(cell.level>=self.max_level):
-            cell.beta_val=-1
-            octree_cells_list.append(cell)
-            return
+    def is_inside(point):
+        check_if_inside = True
+        if check_if_inside:
+            return fast_winding_number_for_meshes(np.array(shape.vertices), np.array(shape.faces), np.array([self.center])) > 0.5
+    
+    def contains_vertices(self):
+        points_gt_x_min = (self.shape.vertices[:,0] > self.point_start[0])
+        points_lt_x_max = (self.shape.vertices[:,0] < self.point_end[0])
+        points_gt_y_min = (self.shape.vertices[:,1] > self.point_start[1])
+        points_lt_y_max = (self.shape.vertices[:,1] < self.point_end[1])
+        points_gt_z_min = (self.shape.vertices[:,2] > self.point_start[2])
+        points_lt_z_max = (self.shape.vertices[:,2] < self.point_end[2])
 
-        cell_in_mesh = self.is_inside_mesh(shape)
-        if cell_in_mesh==-1:
-            self.remaining_cells_to_split += cell.split_cell()
+        points_in_x = np.logical_and(points_lt_x_max, points_gt_x_min)
+        points_in_y = np.logical_and(points_lt_y_max, points_gt_y_min)
+        points_in_z = np.logical_and(points_lt_z_max, points_gt_z_min)
+
+        return np.logical_and(np.logical_and(points_in_x, points_in_y), points_in_z).any()
+
+    def count_locations(self):
+        if(self.is_leaf()):
+            if self.location==Location.BOUNDARY:
+                return np.array([0,0,1])
+            elif self.location==Location.INSIDE:
+                return np.array([1,0,0])
+            elif self.location==Location.OUTSIDE:
+                return np.array([0,1,0])
+            else:
+                throw("got to leaf with no location. BUG")
+            
         else:
-            cell.beta_val=cell_in_mesh
-            octree_cells_list.append(cell)
-
-    ##TODO - check if there's a different way... this MIGHT be buggy
-    #returns 1 if inside, 0 if outside, -1 if partial
-    def is_inside_mesh(self, shape: Trimesh):
-        inside = shape.contains(list(self.corners) + [(self.point_start+self.size/2)])
-        if (inside==True).all():    return 1
-        if (inside==False).all():   return 0
-        else:                       return -1
-
+            res = np.array([0,0,0])
+            for child in self.children:
+                res += child.count_locations()
+            return res
+            
     def is_leaf(self):
         return self.children==None
-
-    def sum_of_volumes(self):
-        if(self.is_leaf()):
-            return self.size.prod()
-        else:
-            res = 0
-            for child in self.children:
-                res += child.sum_of_volumes()
-            return res
-
-    def sum_of_time_inside(self):
-        if(self.is_leaf()):
-            return self.time_inside
-        else:
-            res = datetime.timedelta(0)
-            for child in self.children:
-                res += child.sum_of_time_inside()
-            return res
-
-    def sum_of_time_split(self):
-        if(self.is_leaf()):
-            return self.time_split
-        else:
-            res = datetime.timedelta(0)
-            for child in self.children:
-                res += child.sum_of_time_split()
-            return res
 
     def num_of_leafs(self):
         if(self.is_leaf()):
@@ -171,6 +148,7 @@ def rujum_balance(src_dir, results_dir):
 
     graph = octree_node(point_start=min_indices, size=max_indices-min_indices, shape=shape, max_level=5)
 
+
     # balance.balance(shape) #, spin_axis)
     
     # cur_center_of_mass = {'location': np.array([0., 0., 0.]), 'mass': 0.}
@@ -197,7 +175,7 @@ def test_res(scene):
 
 
 if __name__ == '__main__':
-    stl_path = "resources/GiantToad.stl"
+    stl_path = "resources/balloon.stl"
     # src_dir = os.path.join('resources', rujum_name)
     results_dir = os.path.join('results', "orang")
 
