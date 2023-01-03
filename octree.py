@@ -32,11 +32,11 @@ class Octree:
                             ) -> list[dict[str, int | tuple[float,float,float]]]:
         leaves_list = []
         for idxs in iterator:
-            point_start = tuple(map(operator.mul(idxs, cell_size)))
+            point_start = tuple(map(operator.mul, idxs, cell_size))
             point_start = tuple(map(operator.add, point_start, init_point))
             
             point_end = tuple(map(operator.add, point_start, (1,) * 3))
-            point_end = tuple(map(operator.mul(idxs, cell_size)))
+            point_end = tuple(map(operator.mul, idxs, cell_size))
             point_end = tuple(map(operator.add, point_start, init_point))
             
             loc = self._calc_loc(vertices, point_start, point_end)
