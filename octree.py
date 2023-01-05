@@ -12,47 +12,70 @@ class Octree:
         self._max_level = max_level
         self._tree_df = None
     
-    def _build_init_res(self, mesh_obj: Trimesh):
-        vertices = np.array(mesh_obj.vertices)
+    @staticmethod
+    def _create_df(lvl, cell_start, cell_end, father_idx=None, loc=None):
+        return pd.DataFrame.from_dict([{"level": lvl, "M": 0, 
+                                       "bbox_x0": cell_start[0], "bbox_y0": cell_start[1], "bbox_z0": cell_start[2], 
+                                       "bbox_x1": cell_end[0], "bbox_y1": cell_end[1], "bbox_z1": cell_end[2], 
+                                       "loc": loc, "father_idx": father_idx}])
+    
+    @staticmethod
+    def _concat_df(lvl, cell_start, cell_end, father_idx, loc, M=None, children=None):
+        if "bbox_x0" in cell_end.keys():
+            cell_end.rename(columns={"bbox_x0": "bbox_x1", "bbox_y0": "bbox_y1", "bbox_z0": "bbox_z1"}, inplace=True)
+        return pd.concat([lvl, cell_start, cell_end, father_idx, loc], axis=1)
+    
+    def _build_init_res(self, vertices: np.array):
         obj_start = vertices.min(axis=0)
         obj_end = vertices.max(axis=0)
-        cell_size = (obj_end - obj_start) / self._init_res
-        
-        lvl = 0
+        lvl = -1
         father_idx = None
-        leaves_list = self._create_leaves_list(self._init_res, obj_start, cell_size, vertices, lvl, father_idx)
-        return pd.DataFrame.from_records(leaves_list)
+        df = self._create_df(lvl, obj_start, obj_end, father_idx)
+        return self._create_leaves_df(self._init_res, vertices, df)
     
-    def _create_leaves_list(self, split_size: int, position_start: np.ndarray, cell_size: tuple[float, float, float],
-                            vertices: np.ndarray, lvl: int, father_idx: int | None
-                            ) -> list[dict[str, int | tuple[float,float,float]]]:
-        cell_size = np.array(cell_size)
+    def _create_leaves_df(self, split_size: int, vertices: np.ndarray, df: pd.DataFrame) -> pd.DataFrame:
+        cell_size = self.get_bbox_size(df) / split_size
         leaves_list = []
         for idxs in itertools.product(np.arange(split_size), repeat=3):
             idxs = np.array(idxs)
-            cell_start = position_start + idxs * cell_size
-            cell_end = position_start + (idxs + 1) * cell_size
+            if (df["level"] == -1).all():
+                father_idx = pd.DataFrame(np.array([None]), columns=["father_idx"])
+            else:
+                father_idx = pd.DataFrame(df.index.values, columns=["father_idx"])
             
-            loc = Location.BOUNDARY if is_vertex_in_bbox(vertices, cell_start, cell_end) else None
-            leaf = {"level": lvl, "M": 0, "bbox_start": cell_start, "bbox_end": cell_end, "loc": loc, 
-                    "father_idx": father_idx}
-            leaf.update({f"child{idx}": None for idx in range(8)})
-            leaves_list.append(leaf)
-        return leaves_list
-    
-    def _split_bound_cells(self, lvl: int, leaves_df: pd.DataFrame, mesh_obj: Trimesh):
-        vertices = np.array(mesh_obj.vertices)
-        for leaf in leaves_df:
-            cell_size = (leaf["bbox_end"] - leaf["bbox_start"]) / 2
-            self._create_leaves_list(2, leaf["bbox_start"], cell_size, vertices, lvl, leaf.index)
-            # update father's children
-            # update df
-            # pd.DataFrame.from_records(new_leaves)
+            lvl = df["level"] + 1
+            lvl.reset_index(drop=True, inplace=True)
             
+            bbox_start = self.get_bbox_start(df)
+            bbox_start.reset_index(drop=True, inplace=True)
+            cell_start = bbox_start + cell_size * idxs[None]
+            cell_end = bbox_start + cell_size * (idxs[None] + 1)
+            
+            is_in_bbox = is_vertex_in_bbox(vertices, cell_start.to_numpy(), cell_end.to_numpy())
+            loc = pd.DataFrame(np.where(is_in_bbox, Location.BOUNDARY, None), columns=["loc"])
+            curr_df = self._concat_df(lvl, cell_start, cell_end, father_idx, loc)
+            leaves_list.append(curr_df)
+        return pd.concat(leaves_list, ignore_index=True)
     
+    @staticmethod
+    def get_bbox_start(df: pd.DataFrame) -> pd.DataFrame:
+        return df[["bbox_x0", "bbox_y0", "bbox_z0"]]
+    
+    @staticmethod
+    def get_bbox_end(df: pd.DataFrame) -> pd.DataFrame:
+        return df[["bbox_x1", "bbox_y1", "bbox_z1"]]
+    
+    @staticmethod
+    def get_bbox_size(df: pd.DataFrame) -> np.ndarray:
+        return Octree.get_bbox_end(df).to_numpy() - Octree.get_bbox_start(df).to_numpy()
+    
+    # def get_leaves(self):
+    #     return self._tree_df.loc[(self._tree_df['level'])]
+            
     def build_from_mesh(self, mesh_obj: Trimesh):
-        self._tree_df = self._build_init_res(mesh_obj)
+        vertices = np.array(mesh_obj.vertices)
+        self._tree_df = self._build_init_res(vertices)
         for lvl in range(1, self._max_level):
             curr_df = self._tree_df.loc[(self._tree_df['level'] == lvl - 1) & (self._tree_df['loc'] == Location.BOUNDARY)]
-            self._split_bound_cells(lvl, curr_df, mesh_obj)
+            self._tree_df = pd.concat([self._tree_df, self._create_leaves_df(2, vertices, curr_df)], ignore_index=True)
         
