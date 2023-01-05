@@ -20,4 +20,5 @@ class Location(Enum):
 
 
 def is_vertex_in_bbox(vertices: np.ndarray, cell_start: np.ndarray, cell_end: np.ndarray):
-    return np.logical_and(vertices > cell_start[None], vertices < cell_end[None]).all(axis=1).any()
+    vertices = np.expand_dims(vertices,axis=1)
+    return np.logical_and(vertices > cell_start[None], vertices < cell_end[None]).all(axis=-1).any(axis=0)
