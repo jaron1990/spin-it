@@ -20,10 +20,10 @@ class Octree:
                                        "loc": loc, "father_idx": father_idx}])
     
     @staticmethod
-    def _concat_df(lvl, cell_start, cell_end, father_idx, loc, M=None, children=None):
+    def _concat_df(lvl, cell_start, cell_end, father_idx, M=None):
         if "bbox_x0" in cell_end.keys():
             cell_end.rename(columns={"bbox_x0": "bbox_x1", "bbox_y0": "bbox_y1", "bbox_z0": "bbox_z1"}, inplace=True)
-        return pd.concat([lvl, cell_start, cell_end, father_idx, loc], axis=1)
+        return pd.concat([lvl, cell_start, cell_end, father_idx], axis=1)
     
     def _build_init_res(self, vertices: np.array):
         obj_start = vertices.min(axis=0)
@@ -51,11 +51,14 @@ class Octree:
             cell_start = bbox_start + cell_size * idxs[None]
             cell_end = bbox_start + cell_size * (idxs[None] + 1)
             
-            is_in_bbox = is_vertex_in_bbox(vertices, cell_start.to_numpy(), cell_end.to_numpy())
-            loc = pd.DataFrame(np.where(is_in_bbox, Location.BOUNDARY, None), columns=["loc"])
-            curr_df = self._concat_df(lvl, cell_start, cell_end, father_idx, loc)
+            curr_df = self._concat_df(lvl, cell_start, cell_end, father_idx)
             leaves_list.append(curr_df)
-        return pd.concat(leaves_list, ignore_index=True)
+            
+        leaves_df = pd.concat(leaves_list, ignore_index=True)
+        is_in_bbox = is_vertex_in_bbox(vertices, self.get_bbox_start(leaves_df).to_numpy(), 
+                                       self.get_bbox_end(leaves_df).to_numpy())
+        loc = pd.DataFrame(np.where(is_in_bbox, Location.BOUNDARY, None), columns=["loc"])
+        return pd.concat([leaves_df, loc], axis=1)
     
     @staticmethod
     def get_bbox_start(df: pd.DataFrame) -> pd.DataFrame:
