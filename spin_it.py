@@ -1,6 +1,7 @@
 import argparse
 from octree import Octree
 from io_utils import load_stl #, save_stl
+from optimizer import QPOptimizer
 
 
 def parse_args():
@@ -8,19 +9,23 @@ def parse_args():
     parser.add_argument('-f', '--file-path', required=True, type=str, dest='file_path', help='File path')
     parser.add_argument('-ir', '--init-resolution', default=10, type=int, dest='init_res', help='Initialize object resolution')
     parser.add_argument('-m', '--max-level', default=7, type=int, dest='max_level', help='Maximum levels of resolution')
+    parser.add_argument('-t', '--type', default="yoyo", type=str, dest='calc_type', help='Object type: "yoyo" / "top"')
+    parser.add_argument('-gl', '--gamma-l', default=0.2, type=float, dest='gamma_l', help='Gamma L value')
+    parser.add_argument('-gi', '--gamma-i', default=0.6, type=float, dest='gamma_i', help='Gamma I value')
+    parser.add_argument('-gc', '--gamma-c', default=0.9, type=float, dest='gamma_c', help='Gamma C value')
     return parser.parse_args()
 
 
 class SpinIt:
-    def __init__(self, init_res, max_level) -> None:
+    def __init__(self, init_res, max_level, gamma_i, gamma_c, gamma_l, calc_type) -> None:
         self._octree_obj = Octree(init_res, max_level)
-    
-    def _optimize(self):
-        pass
+        self._optimizer = QPOptimizer(gamma_i, gamma_c, gamma_l, calc_type)
     
     def run(self, mesh_obj):
         self._octree_obj.build_from_mesh(mesh_obj)
-        # self._optimize()
+        boundary_df = self._octree_obj.get_boundary()
+        opt_int_df = self._optimizer(self._octree_obj.get_interior())
+        # TODO: concat boundary_df, opt_int_df
 
 
 if __name__ == "__main__":
