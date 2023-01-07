@@ -14,6 +14,7 @@ from enum import Enum
 #     return interior_points, outer_points
 
 class Location(Enum):
+    UNKNOWN = 0
     INSIDE = 1
     OUTSIDE = 2
     BOUNDARY = 3

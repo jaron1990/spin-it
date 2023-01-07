@@ -13,7 +13,7 @@ class Octree:
         self._tree_df = None
     
     @staticmethod
-    def _create_df(lvl, cell_start, cell_end, father_idx=None, loc=None):
+    def _create_df(lvl, cell_start, cell_end, father_idx=None, loc=Location.UNKNOWN):
         return pd.DataFrame.from_dict([{"level": lvl, "M": 0, 
                                        "bbox_x0": cell_start[0], "bbox_y0": cell_start[1], "bbox_z0": cell_start[2], 
                                        "bbox_x1": cell_end[0], "bbox_y1": cell_end[1], "bbox_z1": cell_end[2], 
@@ -53,7 +53,7 @@ class Octree:
         leaves_df = pd.concat(leaves_list, ignore_index=True)
         is_in_bbox = is_vertex_in_bbox(vertices, self._get_bbox_start(leaves_df).to_numpy(), 
                                        self._get_bbox_end(leaves_df).to_numpy())
-        loc = pd.DataFrame(np.where(is_in_bbox, Location.BOUNDARY, None), columns=["loc"])
+        loc = pd.DataFrame(np.where(is_in_bbox, Location.BOUNDARY, Location.UNKNOWN), columns=["loc"])
         return pd.concat([leaves_df, loc], axis=1)
     
     @staticmethod
@@ -65,6 +65,10 @@ class Octree:
         return df[["bbox_x1", "bbox_y1", "bbox_z1"]]
     
     @staticmethod
+    def _get_bbox_center(df: pd.DataFrame) -> np.array:
+        return (Octree._get_bbox_end(df).to_numpy() + Octree._get_bbox_start(df).to_numpy()) / 2
+    
+    @staticmethod
     def _get_bbox_size(df: pd.DataFrame) -> np.ndarray:
         return Octree._get_bbox_end(df).to_numpy() - Octree._get_bbox_start(df).to_numpy()
     
@@ -74,12 +78,12 @@ class Octree:
     def get_interior(self):
         return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE)]
     
-    def _calc_inner_outter_location(self, mesh_obj: Trimesh):
-        print("hi")
-        fast_winding_number_for_meshes(np.array(mesh_obj.vertices), np.array(mesh_obj.faces), np.array([])) > 0.5
-        fast_winding_number_for_meshes(Trimesh, )
+    def _set_inner_outter_location(self, mesh_obj: Trimesh):
+        centers = self._get_bbox_center(self._tree_df.loc[self._tree_df["loc"] == Location.UNKNOWN])
+        is_inner = fast_winding_number_for_meshes(np.array(mesh_obj.vertices), 
+                                                  np.array(mesh_obj.faces), 
+                                                  centers) > 0.5
         
-        pass
             
     def build_from_mesh(self, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
@@ -90,5 +94,5 @@ class Octree:
             self._tree_df = pd.concat([self._tree_df.loc[~is_bound], 
                                        self._create_leaves_df(2, vertices, self._tree_df.loc[is_bound])], 
                                       ignore_index=True)
-        self._calc_inner_outter_location(mesh_obj)
+        self._set_inner_outter_location(mesh_obj)
         
