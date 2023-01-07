@@ -1,0 +1,11 @@
+name: spinit
+channels:
+  - defaults
+dependencies:
+  - python
+  - trimesh
+  - scipy
+  - scikit-learn
+  - scikit-image
+  - pandas
+  - igl
