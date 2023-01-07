@@ -1,4 +1,5 @@
 import argparse
+import yaml
 from octree import Octree
 from io_utils import load_stl #, save_stl
 from optimizer import QPOptimizer
@@ -6,19 +7,13 @@ from optimizer import QPOptimizer
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='Spin-it')
-    parser.add_argument('-f', '--file-path', required=True, type=str, dest='file_path', help='File path')
-    parser.add_argument('-ir', '--init-resolution', default=10, type=int, dest='init_res', help='Initialize object resolution')
-    parser.add_argument('-m', '--max-level', default=7, type=int, dest='max_level', help='Maximum levels of resolution')
-    parser.add_argument('-t', '--type', default="yoyo", type=str, dest='calc_type', help='Object type: "yoyo" / "top"')
-    parser.add_argument('-gl', '--gamma-l', default=0.2, type=float, dest='gamma_l', help='Gamma L value')
-    parser.add_argument('-gi', '--gamma-i', default=0.6, type=float, dest='gamma_i', help='Gamma I value')
-    parser.add_argument('-gc', '--gamma-c', default=0.9, type=float, dest='gamma_c', help='Gamma C value')
+    parser.add_argument('-c', '--config', required=True, type=str, dest='config', help='Configurations file path')
     return parser.parse_args()
 
 
 class SpinIt:
-    def __init__(self, init_res, max_level, gamma_i, gamma_c, gamma_l, calc_type) -> None:
-        self._octree_obj = Octree(init_res, max_level)
+    def __init__(self, init_resolution, max_resolution_levels, gamma_i, gamma_c, gamma_l, calc_type) -> None:
+        self._octree_obj = Octree(init_resolution, max_resolution_levels)
         self._optimizer = QPOptimizer(gamma_i, gamma_c, gamma_l, calc_type)
     
     def run(self, mesh_obj):
@@ -30,9 +25,12 @@ class SpinIt:
 
 if __name__ == "__main__":
     args = parse_args()
-    spin_it = SpinIt(args.init_res, args.max_level)
+    with open(args.config, 'r') as file:
+        configs = yaml.safe_load(file)
+        mesh_path = configs.pop("mesh_path")
+        spin_it = SpinIt(**configs)
     
-    mesh_obj = load_stl(args.file_path)
+    mesh_obj = load_stl(mesh_path)
     new_obj = spin_it.run(mesh_obj)
     
     output_path = args.file_path # TODO: change to new path
