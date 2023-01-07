@@ -79,10 +79,12 @@ class Octree:
         return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE)]
     
     def _set_inner_outter_location(self, mesh_obj: Trimesh):
-        centers = self._get_bbox_center(self._tree_df.loc[self._tree_df["loc"] == Location.UNKNOWN])
-        is_inner = fast_winding_number_for_meshes(np.array(mesh_obj.vertices), 
-                                                  np.array(mesh_obj.faces), 
+        is_unknown = self._tree_df["loc"] == Location.UNKNOWN
+        centers = self._get_bbox_center(self._tree_df.loc[is_unknown])
+        is_inner = fast_winding_number_for_meshes(np.array(mesh_obj.vertices, order='F'), 
+                                                  np.array(mesh_obj.faces, order='F'), 
                                                   centers) > 0.5
+        self._tree_df.loc[is_unknown, "loc"] = np.where(is_inner, Location.INSIDE, Location.OUTSIDE)
         
             
     def build_from_mesh(self, mesh_obj: Trimesh):
