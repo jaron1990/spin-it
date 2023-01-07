@@ -2,7 +2,7 @@ import numpy as np
 from utils.rujum_utils import get_shapes, get_safe_zone, update_center_of_mass, publish_results
 from trimesh import Scene
 import os
-import balance
+import old.balance_2 as balance_2
 
 
 def rujum_balance(src_dir, results_dir):
@@ -21,7 +21,7 @@ def rujum_balance(src_dir, results_dir):
         print('='*50)
         print('Processing shape [{}] (working top to bottom)'.format(shape_i))
         cur_surface_area = get_safe_zone(cur_shape, next_shape, 0.5)
-        balanced_mesh = balance.balance(cur_shape, cur_surface_area, cur_center_of_mass, scene=scene)
+        balanced_mesh = balance_2.balance(cur_shape, cur_surface_area, cur_center_of_mass, scene=scene)
         cur_center_of_mass = update_center_of_mass(cur_center_of_mass, balanced_mesh)
         carved_shapes.append(balanced_mesh)
     publish_results(carved_shapes, results_dir)

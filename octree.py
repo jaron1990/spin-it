@@ -3,6 +3,7 @@ import numpy as np
 import itertools
 import pandas as pd
 from utils import is_vertex_in_bbox, Location #, is_bbox_inside_mesh
+from igl import fast_winding_number_for_meshes
 
 
 class Octree:
@@ -73,16 +74,21 @@ class Octree:
     def get_interior(self):
         return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE)]
     
-    def _calc_inner_outter_location(self):
+    def _calc_inner_outter_location(self, mesh_obj: Trimesh):
+        print("hi")
+        fast_winding_number_for_meshes(np.array(mesh_obj.vertices), np.array(mesh_obj.faces), np.array([])) > 0.5
+        fast_winding_number_for_meshes(Trimesh, )
+        
         pass
             
     def build_from_mesh(self, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
+        
         self._tree_df = self._build_init_res(vertices)
         for _ in range(1, self._max_level):
             is_bound = self._tree_df['loc'] == Location.BOUNDARY
             self._tree_df = pd.concat([self._tree_df.loc[~is_bound], 
                                        self._create_leaves_df(2, vertices, self._tree_df.loc[is_bound])], 
                                       ignore_index=True)
-        self._calc_inner_outter_location()
+        self._calc_inner_outter_location(mesh_obj)
         
