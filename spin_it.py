@@ -12,14 +12,14 @@ def parse_args():
 
 
 class SpinIt:
-    def __init__(self, init_resolution, max_resolution_levels, gamma_i, gamma_c, gamma_l, calc_type) -> None:
-        self._octree_obj = Octree(init_resolution, max_resolution_levels)
-        self._optimizer = QPOptimizer(gamma_i, gamma_c, gamma_l, calc_type)
+    def __init__(self, octree_configs, optimizer_configs) -> None:
+        self._octree_obj = Octree(**octree_configs)
+        self._optimizer = QPOptimizer(**optimizer_configs)
     
     def run(self, mesh_obj):
         self._octree_obj.build_from_mesh(mesh_obj)
         boundary_df = self._octree_obj.get_boundary()
-        opt_int_df = self._optimizer(self._octree_obj.get_interior())
+        opt_int_df = self._optimizer(self._octree_obj)
         # TODO: concat boundary_df, opt_int_df
 
 
@@ -27,8 +27,11 @@ if __name__ == "__main__":
     args = parse_args()
     with open(args.config, 'r') as file:
         configs = yaml.safe_load(file)
-        mesh_path = configs.pop("mesh_path")
-        spin_it = SpinIt(**configs)
+    
+    mesh_path = configs["mesh_path"]
+    octree_configs = configs["octree"]
+    optimizer_configs = configs["optimizer"]
+    spin_it = SpinIt(octree_configs, optimizer_configs)
     
     mesh_obj = load_stl(mesh_path)
     new_obj = spin_it.run(mesh_obj)

@@ -7,20 +7,21 @@ from igl import fast_winding_number_for_meshes
 
 
 class Octree:
-    def __init__(self, init_res: int, max_level: int) -> None:
-        self._init_res = init_res
-        self._max_level = max_level
+    def __init__(self, init_resolution: int, max_resolution_levels: int, roh: float) -> None:
+        self._init_res = init_resolution
+        self._max_level = max_resolution_levels
         self._tree_df = None
+        self._roh = roh
     
     @staticmethod
-    def _create_df(lvl, cell_start, cell_end, father_idx=None, loc=Location.UNKNOWN):
-        return pd.DataFrame.from_dict([{"level": lvl, "M": 0, 
-                                       "bbox_x0": cell_start[0], "bbox_y0": cell_start[1], "bbox_z0": cell_start[2], 
-                                       "bbox_x1": cell_end[0], "bbox_y1": cell_end[1], "bbox_z1": cell_end[2], 
-                                       "loc": loc}])
+    def _create_df(lvl, cell_start, cell_end, loc=Location.UNKNOWN):
+        return pd.DataFrame.from_dict([{"level": lvl, 
+                                        "bbox_x0": cell_start[0], "bbox_y0": cell_start[1], "bbox_z0": cell_start[2], 
+                                        "bbox_x1": cell_end[0], "bbox_y1": cell_end[1], "bbox_z1": cell_end[2], 
+                                        "loc": loc}])
     
     @staticmethod
-    def _concat_df(lvl, cell_start, cell_end, M=None):
+    def _concat_df(lvl, cell_start, cell_end):
         if "bbox_x0" in cell_end.keys():
             cell_end.rename(columns={"bbox_x0": "bbox_x1", "bbox_y0": "bbox_y1", "bbox_z0": "bbox_z1"}, inplace=True)
         return pd.concat([lvl, cell_start, cell_end], axis=1)
@@ -85,7 +86,6 @@ class Octree:
                                                   np.array(mesh_obj.faces, order='F'), 
                                                   centers) > 0.5
         self._tree_df.loc[is_unknown, "loc"] = np.where(is_inner, Location.INSIDE, Location.OUTSIDE)
-        
             
     def build_from_mesh(self, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
@@ -97,4 +97,33 @@ class Octree:
                                        self._create_leaves_df(2, vertices, self._tree_df.loc[is_bound])], 
                                       ignore_index=True)
         self._set_inner_outter_location(mesh_obj)
+        
+    def set_s_vector(self):
+        p0 = self._get_bbox_start(self._tree_df).to_numpy()
+        p1 = self._get_bbox_end(self._tree_df).to_numpy()
+        size = self._get_bbox_size(self._tree_df)
+        size_x = size[:, 0]
+        size_y = size[:, 1]
+        size_z = size[:, 2]
+        integral_x = (p1[:, 0]**2 - p0[:, 0]**2) / 2
+        integral_y = (p1[:, 1]**2 - p0[:, 1]**2) / 2
+        integral_z = (p1[:, 2]**2 - p0[:, 2]**2) / 2
+        integral_xx = (p1[:, 0]**3 - p0[:, 0]**3) / 3
+        integral_yy = (p1[:, 1]**3 - p0[:, 1]**3) / 3
+        integral_zz = (p1[:, 2]**3 - p0[:, 2]**3) / 3
+        s_1 = self._roh * size_x * size_y * size_z
+        s_x = self._roh * size_y * size_z * integral_x
+        s_y = self._roh * size_x * size_z * integral_y
+        s_z = self._roh * size_x * size_y * integral_z
+        s_xy = self._roh * size_z * integral_x * integral_y
+        s_xz = self._roh * size_y * integral_x * integral_z
+        s_yz = self._roh * size_x * integral_y * integral_z
+        s_xx = self._roh * size_y * size_z * integral_xx
+        s_yy = self._roh * size_x * size_z * integral_yy
+        s_zz = self._roh * size_x * size_y * integral_zz
+        s_vector = pd.DataFrame(s_1, s_x, s_y, s_z, s_xy, s_xz, 
+                                s_yz, s_xx, s_yy, s_zz, 
+                                columns=["s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz",
+                                         "s_yz", "s_xx", "s_yy", "s_zz"])
+        self._tree_df = pd.concat([self._tree_df, s_vector], axis=1)
         
