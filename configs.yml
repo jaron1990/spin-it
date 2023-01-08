@@ -1,4 +1,4 @@
-mesh_path: "resources/Orangutan-man_mini_figures_1.stl"
+mesh_path: "resources/balloon.stl"
 octree:
   init_resolution: 10
   max_resolution_levels: 2
@@ -6,5 +6,5 @@ octree:
 optimizer:
   calc_type: "top" # "yoyo"
   gamma_l: 0.2
-  gamma_i: 0.6
-  gamma_c: 0.9
+  gamma_i: 0.9
+  gamma_c: 0.7

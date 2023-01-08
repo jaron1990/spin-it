@@ -82,11 +82,14 @@ class Octree:
     def get_internal_beta(self):
         return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE), 'beta']
 
+    def set_internal_beta(self, internal_beta):
+        self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE), 'beta'] = internal_beta
+
     def get_internal_s_vector(self):
-        return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE), "s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]
+        return self._tree_df.loc[(self._tree_df['loc'] == Location.INSIDE), ["s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]]
 
     def get_boundary_s_vector(self):
-        return self._tree_df.loc[(self._tree_df['loc'] == Location.BOUNDARY), "s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]
+        return self._tree_df.loc[(self._tree_df['loc'] == Location.BOUNDARY), ["s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]]
 
     def _set_inner_outter_location(self, mesh_obj: Trimesh):
         is_unknown = self._tree_df["loc"] == Location.UNKNOWN
@@ -110,7 +113,7 @@ class Octree:
         
     def _set_beta(self):
         is_outside = (self._tree_df['loc'] == Location.OUTSIDE)
-        beta_vals = np.where(is_outside, 1., 0.)
+        beta_vals = np.where(is_outside, 0., 1.)
         beta_df = pd.DataFrame(beta_vals, columns=["beta"])
         self._tree_df = pd.concat([self._tree_df, beta_df], axis=1)
 
@@ -137,8 +140,12 @@ class Octree:
         s_xx = self._roh * size_y * size_z * integral_xx
         s_yy = self._roh * size_x * size_z * integral_yy
         s_zz = self._roh * size_x * size_y * integral_zz
-        s_vector = pd.DataFrame(np.stack((s_1, s_x, s_y, s_z, s_xy, s_xz, s_yz, s_xx, s_yy, s_zz), 
-                                axis=-1), 
-                                columns=['s_1', 's_x', 's_y', 's_z', 's_xy', 's_xz', 's_yz', 's_xx', 's_yy', 's_zz'])
-        self._tree_df = pd.concat([self._tree_df, s_vector], axis=1)
+
+        if 's_1' in self._tree_df.columns:
+            self._tree_df[['s_1', 's_x', 's_y', 's_z', 's_xy', 's_xz', 's_yz', 's_xx', 's_yy', 's_zz']] = np.stack((s_1, s_x, s_y, s_z, s_xy, s_xz, s_yz, s_xx, s_yy, s_zz), axis=-1)
+        else:
+            s_vector = pd.DataFrame(np.stack((s_1, s_x, s_y, s_z, s_xy, s_xz, s_yz, s_xx, s_yy, s_zz), 
+                                    axis=-1), 
+                                    columns=['s_1', 's_x', 's_y', 's_z', 's_xy', 's_xz', 's_yz', 's_xx', 's_yy', 's_zz'])
+            self._tree_df = pd.concat([self._tree_df, s_vector], axis=1)
         
