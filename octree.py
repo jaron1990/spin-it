@@ -4,7 +4,9 @@ import itertools
 import pandas as pd
 from utils import is_vertex_in_bbox, Location #, is_bbox_inside_mesh
 from igl import fast_winding_number_for_meshes
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits import mplot3d
 
 class Octree:
     def __init__(self, init_resolution: int, max_resolution_levels: int, roh: float) -> None:
@@ -99,6 +101,74 @@ class Octree:
                                                   centers) > 0.5
         self._tree_df.loc[is_unknown, "loc"] = np.where(is_inner, Location.INSIDE, Location.OUTSIDE)
             
+    
+
+    def _plot(self):
+        inside_df = self.get_interior()
+        boundary_df = self.get_boundary()
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        for ind in inside_df.index:
+            (x0, y0, z0, x1, y1, z1) = (inside_df['bbox_x0'][ind], inside_df['bbox_y0'][ind], inside_df['bbox_z0'][ind], inside_df['bbox_x1'][ind], inside_df['bbox_y1'][ind], inside_df['bbox_z1'][ind])
+            
+            
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z0
+            ax.plot_surface(x, y, z, color='b')
+
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z1
+            ax.plot_surface(x, y, z, color='b')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y0
+            ax.plot_surface(x, y, z, color='b')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y1
+            ax.plot_surface(x, y, z, color='b')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x0
+            ax.plot_surface(x, y, z, color='b')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x1
+            ax.plot_surface(x, y, z, color='b')
+        for ind in boundary_df.index:
+            (x0, y0, z0, x1, y1, z1) = (boundary_df['bbox_x0'][ind], boundary_df['bbox_y0'][ind], boundary_df['bbox_z0'][ind], boundary_df['bbox_x1'][ind], boundary_df['bbox_y1'][ind], boundary_df['bbox_z1'][ind])
+            
+            
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z0
+            ax.plot_surface(x, y, z, color='r')
+
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z1
+            ax.plot_surface(x, y, z, color='r')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y0
+            ax.plot_surface(x, y, z, color='r')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y1
+            ax.plot_surface(x, y, z, color='r')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x0
+            ax.plot_surface(x, y, z, color='r')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x1
+            ax.plot_surface(x, y, z, color='r')
+
+        
+
+        plt.savefig("boxes.png")
+
+
+
     def build_from_mesh(self, mesh_obj: Trimesh):
         vertices = np.array(mesh_obj.vertices)
         
@@ -110,6 +180,8 @@ class Octree:
                                       ignore_index=True)
         self._set_inner_outter_location(mesh_obj)
         self._set_beta()
+
+        self._plot()
         
     def _set_beta(self):
         is_outside = (self._tree_df['loc'] == Location.OUTSIDE)

@@ -2,6 +2,7 @@ from octree import Octree
 from scipy.optimize import minimize
 import numpy as np
 from scipy.sparse.csgraph import laplacian
+import matplotlib.pyplot as plt
 
 
 class QPOptimizer:
@@ -13,6 +14,7 @@ class QPOptimizer:
 
         self._R = np.eye(2)
         self.iter=0
+        self.loss_list = []
 
     def _calculate_s_total(self, internal_beta, octree):
         s_internal = octree.get_internal_s_vector()
@@ -44,12 +46,13 @@ class QPOptimizer:
         f_yoyo = self._gamma_i*((I_a/I_c)**2+(I_b/I_c)**2)
         f_top = self._gamma_c*(s_total['s_z']**2) + f_yoyo
 
-        print(f'iter={self.iter}')
-        self.iter+=1
-        print(f'min_beta={internal_beta.min()}, max_beta={internal_beta.max()}')
-        print(f'Ia/Ic={I_a/I_c}, Ib/Ic={I_b/I_c}')
-        print(f'f_top={f_top}')
+        # print(f'iter={self.iter}')
+        # self.iter+=1
+        # print(f'min_beta={internal_beta.min()}, max_beta={internal_beta.max()}')
+        # print(f'Ia/Ic={I_a/I_c}, Ib/Ic={I_b/I_c}')
+        # print(f'f_top={f_top}')
 
+        self.loss_list.append(f_top)
         return f_top
 
 
@@ -84,7 +87,6 @@ class QPOptimizer:
         beta = octree.get_internal_beta()
         octree.set_s_vector()
 
-
         bounds = [(0, 1) for i in range(len(beta))]
 
         problem = [{'type': 'eq', 'fun': self._constraint_s_x, 'args':(octree,)},           
@@ -92,6 +94,6 @@ class QPOptimizer:
                     {'type': 'eq', 'fun': self._constraint_s_xz, 'args':(octree,)},
                     {'type': 'eq', 'fun': self._constraint_s_yz, 'args':(octree,)}]
 
-        result = minimize(self.loss, beta, bounds=bounds, constraints=problem, method='SLSQP', args=(octree,))
-
+        result = minimize(self.loss, beta, bounds=bounds, constraints=problem, method='SLSQP', args=(octree,), options={'disp': True})
+        print(result)
         octree.set_internal_beta(result.x)
