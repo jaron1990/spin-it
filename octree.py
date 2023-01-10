@@ -83,19 +83,19 @@ class OctreeTensorHandler:
     
     @staticmethod
     def get_boundary(tree_tensor: torch.Tensor) -> torch.Tensor:
-        return tree_tensor[OctreeTensorHandler.get_loc(tree_tensor) == Location.BOUNDARY]
+        return tree_tensor[(OctreeTensorHandler.get_loc(tree_tensor) == Location.BOUNDARY).squeeze(-1)]
     
     @staticmethod
     def get_interior(tree_tensor: torch.Tensor) -> torch.Tensor:
-        return tree_tensor[OctreeTensorHandler.get_loc(tree_tensor) == Location.INSIDE]
+        return tree_tensor[(OctreeTensorHandler.get_loc(tree_tensor) == Location.INSIDE).squeeze(-1)]
     
     @staticmethod
     def get_internal_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
         return OctreeTensorHandler.get_interior(tree_tensor)[:, OctreeTensorMapping.BETA]
 
     @staticmethod
-    def set_internal_beta(internal_beta): # TODO: fix
-        self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE), 'beta'] = internal_beta
+    def set_internal_beta(tree_tensor, internal_beta) -> torch.Tensor:
+        return OctreeTensorHandler.set_beta(OctreeTensorHandler.get_interior(tree_tensor), internal_beta)
 
     @staticmethod
     def get_s_vector(tree_tensor: torch.Tensor) -> torch.Tensor:
@@ -126,11 +126,50 @@ class OctreeTensorHandler:
         return OctreeTensorHandler.set_loc(tree_tensor, is_unknown, new_loc)
 
     @staticmethod
-    def set_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
+    def set_beta(tree_tensor: torch.Tensor, beta_vals: None | torch.Tensor = None) -> torch.Tensor:
         is_outside = OctreeTensorHandler.get_loc(tree_tensor) == Location.OUTSIDE
-        beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([0.]))
-        assert tree_tensor[0].shape[0] == OctreeTensorMapping.BETA
-        return torch.cat((tree_tensor, beta_vals), axis=-1)
+        if beta_vals is None:
+            beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([0.]))
+            assert tree_tensor[0].shape[0] == OctreeTensorMapping.BETA
+            return torch.cat((tree_tensor, beta_vals), axis=-1)
+        tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals
+        return tree_tensor
+
+    @staticmethod
+    def set_s_vector(tree_tensor, roh):
+        p0 = OctreeTensorHandler.get_bbox_start(tree_tensor)
+        p1 = OctreeTensorHandler.get_bbox_end(tree_tensor)
+        size = tree_tensor.get_bbox_size(tree_tensor)
+        size_x = size[:, 0]
+        size_y = size[:, 1]
+        size_z = size[:, 2]
+        
+        integral = lambda x1, x0: (x1**2 -x0**2) / 2
+        integral_x = integral(p1[:, 0], p0[:, 0])
+        integral_y = integral(p1[:, 1], p0[:, 1])
+        integral_z = integral(p1[:, 2], p0[:, 2])
+        
+        integral = lambda x1, x0: (x1**3 -x0**3) / 3
+        integral_xx = integral(p1[:, 0], p0[:, 0])
+        integral_yy = integral(p1[:, 1], p0[:, 1])
+        integral_zz = integral(p1[:, 2], p0[:, 2])
+        
+        s_1 = roh * size_x * size_y * size_z
+        s_x = roh * size_y * size_z * integral_x
+        s_y = roh * size_x * size_z * integral_y
+        s_z = roh * size_x * size_y * integral_z
+        s_xy = roh * size_z * integral_x * integral_y
+        s_xz = roh * size_y * integral_x * integral_z
+        s_yz = roh * size_x * integral_y * integral_z
+        s_xx = roh * size_y * size_z * integral_xx
+        s_yy = roh * size_x * size_z * integral_yy
+        s_zz = roh * size_x * size_y * integral_zz
+        
+        return torch.cat((tree_tensor[:, :OctreeTensorMapping.S_1],
+                          s_1, 
+                          s_x, s_y, s_z, 
+                          s_xy, s_xz, s_yz, 
+                          s_xx, s_yy, s_zz), dim=-1)
 
 
 class Octree:
@@ -171,17 +210,17 @@ class Octree:
         tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
 
-        self._plot()
+        self._plot(tree_tensor)
         return tree_tensor
 
-    def _plot(self):
-        inside_df = self.get_interior()
-        boundary_df = self.get_boundary()
+    def _plot(self, tree_tensor):
+        inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+        boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        for ind in inside_df.index:
-            (x0, y0, z0, x1, y1, z1) = (inside_df['bbox_x0'][ind], inside_df['bbox_y0'][ind], inside_df['bbox_z0'][ind], inside_df['bbox_x1'][ind], inside_df['bbox_y1'][ind], inside_df['bbox_z1'][ind])
-            
+        for ind in range(inside_tensor.shape[0]):
+            x0, y0, z0 = [v.item() for v in OctreeTensorHandler.get_bbox_start(inside_tensor)[ind].split(1)]
+            x1, y1, z1 = [v.item() for v in OctreeTensorHandler.get_bbox_end(inside_tensor)[ind].split(1)]
             
             x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
             z = np.ones(x.shape) * z0
@@ -206,67 +245,33 @@ class Octree:
             y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
             x = np.ones(y.shape) * x1
             ax.plot_surface(x, y, z, color='b')
-        for ind in boundary_df.index:
-            (x0, y0, z0, x1, y1, z1) = (boundary_df['bbox_x0'][ind], boundary_df['bbox_y0'][ind], boundary_df['bbox_z0'][ind], boundary_df['bbox_x1'][ind], boundary_df['bbox_y1'][ind], boundary_df['bbox_z1'][ind])
-            
-            
-            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
-            z = np.ones(x.shape) * z0
-            ax.plot_surface(x, y, z, color='r')
-
-            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
-            z = np.ones(x.shape) * z1
-            ax.plot_surface(x, y, z, color='r')
-
-            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
-            y = np.ones(x.shape) * y0
-            ax.plot_surface(x, y, z, color='r')
-
-            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
-            y = np.ones(x.shape) * y1
-            ax.plot_surface(x, y, z, color='r')
-
-            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
-            x = np.ones(y.shape) * x0
-            ax.plot_surface(x, y, z, color='r')
-
-            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
-            x = np.ones(y.shape) * x1
-            ax.plot_surface(x, y, z, color='r')
-
         
+        for ind in range(boundary_tensor.shape[0]):
+            x0, y0, z0 = [v.item() for v in OctreeTensorHandler.get_bbox_start(boundary_tensor)[ind].split(1)]
+            x1, y1, z1 = [v.item() for v in OctreeTensorHandler.get_bbox_end(boundary_tensor)[ind].split(1)]
+            
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z0
+            ax.plot_surface(x, y, z, color='r')
 
+            x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
+            z = np.ones(x.shape) * z1
+            ax.plot_surface(x, y, z, color='r')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y0
+            ax.plot_surface(x, y, z, color='r')
+
+            x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
+            y = np.ones(x.shape) * y1
+            ax.plot_surface(x, y, z, color='r')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x0
+            ax.plot_surface(x, y, z, color='r')
+
+            y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
+            x = np.ones(y.shape) * x1
+            ax.plot_surface(x, y, z, color='r')
         plt.savefig("boxes.png")
-
-    def set_s_vector(self):
-        p0 = self._get_bbox_start(self._tree_tensor).to_numpy()
-        p1 = self._get_bbox_end(self._tree_tensor).to_numpy()
-        size = self._get_bbox_size(self._tree_tensor)
-        size_x = size[:, 0]
-        size_y = size[:, 1]
-        size_z = size[:, 2]
-        integral_x = (p1[:, 0]**2 - p0[:, 0]**2) / 2
-        integral_y = (p1[:, 1]**2 - p0[:, 1]**2) / 2
-        integral_z = (p1[:, 2]**2 - p0[:, 2]**2) / 2
-        integral_xx = (p1[:, 0]**3 - p0[:, 0]**3) / 3
-        integral_yy = (p1[:, 1]**3 - p0[:, 1]**3) / 3
-        integral_zz = (p1[:, 2]**3 - p0[:, 2]**3) / 3
-        s_1 = self._roh * size_x * size_y * size_z
-        s_x = self._roh * size_y * size_z * integral_x
-        s_y = self._roh * size_x * size_z * integral_y
-        s_z = self._roh * size_x * size_y * integral_z
-        s_xy = self._roh * size_z * integral_x * integral_y
-        s_xz = self._roh * size_y * integral_x * integral_z
-        s_yz = self._roh * size_x * integral_y * integral_z
-        s_xx = self._roh * size_y * size_z * integral_xx
-        s_yy = self._roh * size_x * size_z * integral_yy
-        s_zz = self._roh * size_x * size_y * integral_zz
-
-        if 's_1' in self._tree_tensor.columns:
-            self._tree_tensor[['s_1', 's_x', 's_y', 's_z', 's_xy', 's_xz', 's_yz', 's_xx', 's_yy', 's_zz']] = np.stack((s_1, s_x, s_y, s_z, s_xy, s_xz, s_yz, s_xx, s_yy, s_zz), axis=-1)
-        else:
-            s_vector = pd.DataFrame(np.stack((s_1, s_x, s_y, s_z, s_xy, s_xz, s_yz, s_xx, s_yy, s_zz), 
-                                    axis=-1), 
-                                    columns=['s_1', 's_x', 's_y', 's_z', 's_xy', 's_xz', 's_yz', 's_xx', 's_yy', 's_zz'])
-            self._tree_tensor = pd.concat([self._tree_tensor, s_vector], axis=1)
         
