@@ -1,6 +1,8 @@
 name: spinit
 channels:
   - defaults
+  - conda-forge
+  - pytorch
 dependencies:
   - python
   - trimesh
@@ -9,3 +11,6 @@ dependencies:
   - scikit-image
   - pandas
   - igl
+  - pytorch<=1.12.1
+  - torchvision
+  - cudatoolkit
