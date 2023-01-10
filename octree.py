@@ -18,17 +18,23 @@ class OctreeTensorMapping:
     BBOX_Y1 = 5
     BBOX_Z1 = 6
     LOC = 7
+    BETA = 8
+    S_1 = 9
+    S_X = 10
+    S_Y = 11
+    S_Z = 12
+    S_XY = 13
+    S_XZ = 14
+    S_YZ = 15
+    S_XX = 16
+    S_YY = 17
+    S_ZZ = 18
 
 
-class Octree:
-    def __init__(self, init_resolution: int, max_resolution_levels: int, roh: float) -> None:
-        self._init_res = init_resolution
-        self._max_level = max_resolution_levels
-        self._roh = roh
-    
+class OctreeTensorHandler:
     @staticmethod
-    def _stack_data(lvl: int | torch.Tensor, cell_start: torch.Tensor, cell_end: torch.Tensor, 
-                           loc: int | torch.Tensor) -> torch.Tensor:
+    def stack_base_data(lvl: int | torch.Tensor, cell_start: torch.Tensor, cell_end: torch.Tensor, loc: int | torch.Tensor
+                    ) -> torch.Tensor:
         if type(lvl) == int:
             lvl = torch.tensor([[lvl]])
         if type(loc) == int:
@@ -39,90 +45,134 @@ class Octree:
             cell_end = cell_end[None]
         return torch.hstack((lvl, cell_start, cell_end, loc))
     
-    def _build_init_res(self, vertices: torch.Tensor):
-        obj_start = vertices.min(axis=0).values
-        obj_end = vertices.max(axis=0).values
-        lvl = -1
-        loc = Location.UNKNOWN
-        return self._create_leaves_tensor(self._init_res, vertices, self._stack_data(lvl, obj_start, obj_end, loc))
-    
-    def _create_leaves_tensor(self, split_size: int, vertices: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
-        cell_size = self._get_bbox_size(tree_tensor) / split_size
-        
-        split_range = torch.arange(split_size)
-        idxs = torch.cartesian_prod(*([split_range] * 3))
-        lvl = (self._get_lvl(tree_tensor) + 1).repeat(idxs.shape[0], 1)
-        bbox_start = self._get_bbox_start(tree_tensor).repeat(idxs.shape[0], 1)
-        cell_start = bbox_start + (cell_size[None] * idxs.unsqueeze(1)).reshape(-1, 3)
-        cell_end = bbox_start + (cell_size[None] * (idxs + 1).unsqueeze(1)).reshape(-1 ,3)
-        
-        is_in_bbox = is_vertex_in_bbox(vertices, cell_start, cell_end)
-        loc = torch.where(is_in_bbox, torch.tensor([Location.BOUNDARY]), torch.tensor([Location.UNKNOWN])).unsqueeze(1)
-        return self._stack_data(lvl, cell_start, cell_end, loc)
-    
     @staticmethod
-    def _get_bbox_start(tree_tensor: torch.Tensor) -> torch.Tensor:
+    def get_bbox_start(tree_tensor: torch.Tensor) -> torch.Tensor:
         return tree_tensor[:, torch.LongTensor([OctreeTensorMapping.BBOX_X0, 
                                                 OctreeTensorMapping.BBOX_Y0, 
                                                 OctreeTensorMapping.BBOX_Z0])]
     
     @staticmethod
-    def _get_bbox_end(tree_tensor: torch.Tensor) -> torch.Tensor:
+    def get_bbox_end(tree_tensor: torch.Tensor) -> torch.Tensor:
         return tree_tensor[:, torch.LongTensor([OctreeTensorMapping.BBOX_X1, 
                                                 OctreeTensorMapping.BBOX_Y1, 
                                                 OctreeTensorMapping.BBOX_Z1])]
     
     @staticmethod
-    def _get_bbox_center(tree_tensor: torch.Tensor) -> torch.Tensor:
-        return (Octree._get_bbox_end(tree_tensor) + Octree._get_bbox_start(tree_tensor)) / 2
+    def get_bbox_center(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return (OctreeTensorHandler.get_bbox_end(tree_tensor) + OctreeTensorHandler.get_bbox_start(tree_tensor)) / 2
     
     @staticmethod
-    def _get_bbox_size(tree_tensor: torch.Tensor) -> torch.Tensor:
-        return Octree._get_bbox_end(tree_tensor) - Octree._get_bbox_start(tree_tensor)
+    def get_bbox_size(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return OctreeTensorHandler.get_bbox_end(tree_tensor) - OctreeTensorHandler.get_bbox_start(tree_tensor)
     
     @staticmethod
-    def _get_lvl(tree_tensor: torch.Tensor):
+    def get_lvl(tree_tensor: torch.Tensor) -> torch.Tensor:
         return tree_tensor[:, torch.LongTensor([OctreeTensorMapping.LVL])]
     
     @staticmethod
-    def _get_loc(tree_tensor: torch.Tensor):
+    def get_loc(tree_tensor: torch.Tensor) -> torch.Tensor:
         return tree_tensor[:, torch.LongTensor([OctreeTensorMapping.LOC])]
     
     @staticmethod
-    def _set_loc(tree_tensor: torch.Tensor, mask: torch.Tensor, new_loc: torch.Tensor):
+    def set_loc(tree_tensor: torch.Tensor, row_mask: torch.Tensor, new_loc: torch.Tensor) -> torch.Tensor:
         new_loc = new_loc.to(tree_tensor)
-        if len(new_loc.shape) == 1:
-            new_loc = new_loc.unsqueeze(-1)        
-        tree_tensor[mask][:, torch.LongTensor([OctreeTensorMapping.LOC])] = new_loc
+        col_mask = torch.zeros_like(tree_tensor[0]).bool()
+        col_mask[OctreeTensorMapping.LOC] = True
+        tree_tensor[row_mask, col_mask] = new_loc
         return tree_tensor
     
-    def get_boundary(self):
-        return self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.BOUNDARY)]
+    @staticmethod
+    def get_boundary(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return tree_tensor[OctreeTensorHandler.get_loc(tree_tensor) == Location.BOUNDARY]
     
-    def get_interior(self):
-        return self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE)]
+    @staticmethod
+    def get_interior(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return tree_tensor[OctreeTensorHandler.get_loc(tree_tensor) == Location.INSIDE]
     
-    def get_internal_beta(self):
-        return self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE), 'beta']
-
-    def set_internal_beta(self, internal_beta):
-        self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE), 'beta'] = internal_beta
-
-    def get_internal_s_vector(self):
-        return self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE), ["s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]]
-
-    def get_boundary_s_vector(self):
-        return self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.BOUNDARY), ["s_1", "s_x", "s_y", "s_z", "s_xy", "s_xz", "s_yz", "s_xx", "s_yy", "s_zz"]]
+    @staticmethod
+    def get_internal_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return OctreeTensorHandler.get_interior(tree_tensor)[:, OctreeTensorMapping.BETA]
 
     @staticmethod
-    def _calc_inner_outter_location(mesh_obj: Trimesh, tree_tensor: torch.Tensor) -> torch.Tensor:
-        is_unknown = (Octree._get_loc(tree_tensor) == Location.UNKNOWN).squeeze(-1)
-        centers = Octree._get_bbox_center(tree_tensor[is_unknown])
+    def set_internal_beta(internal_beta): # TODO: fix
+        self._tree_tensor.loc[(self._tree_tensor['loc'] == Location.INSIDE), 'beta'] = internal_beta
+
+    @staticmethod
+    def get_s_vector(tree_tensor: torch.Tensor) -> torch.Tensor:
+        cols = torch.tensor([OctreeTensorMapping.S_1,
+                             OctreeTensorMapping.S_X, OctreeTensorMapping.S_Y, OctreeTensorMapping.S_Z,
+                             OctreeTensorMapping.S_XY, OctreeTensorMapping.S_XZ, OctreeTensorMapping.S_YZ,
+                             OctreeTensorMapping.S_XX, OctreeTensorMapping.S_YY, OctreeTensorMapping.S_ZZ])
+        cols_mask = torch.zeros_like(tree_tensor[0])
+        cols_mask[cols] = True
+        return tree_tensor[:, cols_mask]
+
+    @staticmethod
+    def get_internal_s_vector(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return OctreeTensorHandler.get_s_vector(OctreeTensorHandler.get_interior(tree_tensor))
+
+    @staticmethod
+    def get_boundary_s_vector(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return OctreeTensorHandler.get_s_vector(OctreeTensorHandler.get_boundary(tree_tensor))
+
+    @staticmethod
+    def calc_inner_outter_location(mesh_obj: Trimesh, tree_tensor: torch.Tensor) -> torch.Tensor:
+        is_unknown = (OctreeTensorHandler.get_loc(tree_tensor) == Location.UNKNOWN).squeeze(-1)
+        centers = OctreeTensorHandler.get_bbox_center(tree_tensor[is_unknown])
         is_inner = fast_winding_number_for_meshes(np.array(mesh_obj.vertices), 
                                                   np.array(mesh_obj.faces), 
                                                   centers.numpy()) > 0.5
         new_loc = torch.where(torch.tensor(is_inner), torch.tensor([Location.INSIDE]), torch.tensor([Location.OUTSIDE]))
-        return Octree._set_loc(tree_tensor, is_unknown, new_loc)
+        return OctreeTensorHandler.set_loc(tree_tensor, is_unknown, new_loc)
+
+    @staticmethod
+    def set_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
+        is_outside = OctreeTensorHandler.get_loc(tree_tensor) == Location.OUTSIDE
+        beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([0.]))
+        assert tree_tensor[0].shape[0] == OctreeTensorMapping.BETA
+        return torch.cat((tree_tensor, beta_vals), axis=-1)
+
+
+class Octree:
+    def __init__(self, init_resolution: int, max_resolution_levels: int, roh: float) -> None:
+        self._init_res = init_resolution
+        self._max_level = max_resolution_levels
+        self._roh = roh
+    
+    def _build_init_res(self, vertices: torch.Tensor):
+        obj_start = vertices.min(axis=0).values
+        obj_end = vertices.max(axis=0).values
+        lvl = -1
+        loc = Location.UNKNOWN
+        return self._create_leaves_tensor(self._init_res, vertices, 
+                                          OctreeTensorHandler.stack_base_data(lvl, obj_start, obj_end, loc))
+    
+    def _create_leaves_tensor(self, split_size: int, vertices: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
+        cell_size = OctreeTensorHandler.get_bbox_size(tree_tensor) / split_size
+        
+        split_range = torch.arange(split_size)
+        idxs = torch.cartesian_prod(*([split_range] * 3))
+        lvl = (OctreeTensorHandler.get_lvl(tree_tensor) + 1).repeat(idxs.shape[0], 1)
+        bbox_start = OctreeTensorHandler.get_bbox_start(tree_tensor).repeat(idxs.shape[0], 1)
+        cell_start = bbox_start + (cell_size[None] * idxs.unsqueeze(1)).reshape(-1, 3)
+        cell_end = bbox_start + (cell_size[None] * (idxs + 1).unsqueeze(1)).reshape(-1 ,3)
+        
+        is_in_bbox = is_vertex_in_bbox(vertices, cell_start, cell_end)
+        loc = torch.where(is_in_bbox, torch.tensor([Location.BOUNDARY]), torch.tensor([Location.UNKNOWN])).unsqueeze(1)
+        return OctreeTensorHandler.stack_base_data(lvl, cell_start, cell_end, loc)
+    
+    def build_from_mesh(self, mesh_obj: Trimesh):
+        vertices = torch.tensor(mesh_obj.vertices)
+        tree_tensor = self._build_init_res(vertices)
+        for _ in range(1, self._max_level):
+            is_bound = OctreeTensorHandler.get_loc(tree_tensor).squeeze(-1) == Location.BOUNDARY
+            tree_tensor = torch.vstack((tree_tensor[~is_bound], 
+                                        self._create_leaves_tensor(2, vertices, tree_tensor[is_bound])))
+        tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
+        tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
+
+        self._plot()
+        return tree_tensor
 
     def _plot(self):
         inside_df = self.get_interior()
@@ -187,26 +237,6 @@ class Octree:
         
 
         plt.savefig("boxes.png")
-
-
-
-    def build_from_mesh(self, mesh_obj: Trimesh):
-        vertices = torch.tensor(mesh_obj.vertices)
-        tree_tensor = self._build_init_res(vertices)
-        for _ in range(1, self._max_level):
-            is_bound = self._get_loc(tree_tensor).squeeze(-1) == Location.BOUNDARY
-            tree_tensor = torch.vstack((tree_tensor[~is_bound], self._create_leaves_tensor(2, vertices, tree_tensor[is_bound])))
-        tree_tensor = self._calc_inner_outter_location(mesh_obj, tree_tensor)
-        tree_tensor = self._set_beta()
-
-        self._plot()
-        return tree_tensor
-        
-    def _set_beta(self):
-        is_outside = (self._tree_tensor['loc'] == Location.OUTSIDE)
-        beta_vals = np.where(is_outside, 0., 1.)
-        beta_df = pd.DataFrame(beta_vals, columns=["beta"])
-        self._tree_tensor = pd.concat([self._tree_tensor, beta_df], axis=1)
 
     def set_s_vector(self):
         p0 = self._get_bbox_start(self._tree_tensor).to_numpy()
