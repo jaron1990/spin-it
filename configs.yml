@@ -1,8 +1,9 @@
-mesh_path: "resources/balloon.stl"
+object:
+  mesh_path: "resources/balloon.stl"
+  roh: 1. # 1.17 g/cm^3
 octree:
   init_resolution: 10
   max_resolution_levels: 2
-  roh: 1. # 1.17 g/cm^3
 optimizer:
   calc_type: "top" # "yoyo"
   gamma_l: 0.2

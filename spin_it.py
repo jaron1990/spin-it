@@ -1,7 +1,7 @@
 import argparse
 import yaml
-from octree import Octree
-from io_utils import load_stl #, save_stl
+from octree import Octree, OctreeTensorHandler
+from io_utils import MeshObj
 from optimizer import QPOptimizer
 
 
@@ -16,10 +16,10 @@ class SpinIt:
         self._octree_obj = Octree(**octree_configs)
         self._optimizer = QPOptimizer(**optimizer_configs)
     
-    def run(self, mesh_obj):
-        self._octree_obj.build_from_mesh(mesh_obj)
-        boundary_df = self._octree_obj.get_boundary()
-        opt_int_df = self._optimizer(self._octree_obj)
+    def run(self, mesh_obj: MeshObj):
+        octree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
+        boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
+        opt_int_df = self._optimizer(octree_tensor, mesh_obj.roh)
         # TODO: concat boundary_df, opt_int_df
 
 
@@ -28,12 +28,8 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         configs = yaml.safe_load(file)
     
-    mesh_path = configs["mesh_path"]
-    octree_configs = configs["octree"]
-    optimizer_configs = configs["optimizer"]
-    spin_it = SpinIt(octree_configs, optimizer_configs)
-    
-    mesh_obj = load_stl(mesh_path)
+    spin_it = SpinIt(configs["octree"], configs["optimizer"])
+    mesh_obj = MeshObj(**configs["object"])
     new_obj = spin_it.run(mesh_obj)
     
     output_path = args.file_path # TODO: change to new path
