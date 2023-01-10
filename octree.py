@@ -139,7 +139,7 @@ class OctreeTensorHandler:
     def set_s_vector(tree_tensor, roh):
         p0 = OctreeTensorHandler.get_bbox_start(tree_tensor)
         p1 = OctreeTensorHandler.get_bbox_end(tree_tensor)
-        size = tree_tensor.get_bbox_size(tree_tensor)
+        size = OctreeTensorHandler.get_bbox_size(tree_tensor)
         size_x = size[:, 0]
         size_y = size[:, 1]
         size_z = size[:, 2]
@@ -166,17 +166,16 @@ class OctreeTensorHandler:
         s_zz = roh * size_x * size_y * integral_zz
         
         return torch.cat((tree_tensor[:, :OctreeTensorMapping.S_1],
-                          s_1, 
-                          s_x, s_y, s_z, 
-                          s_xy, s_xz, s_yz, 
-                          s_xx, s_yy, s_zz), dim=-1)
+                          torch.stack((s_1, 
+                                       s_x, s_y, s_z, 
+                                       s_xy, s_xz, s_yz, 
+                                       s_xx, s_yy, s_zz), axis=-1)), dim=-1)
 
 
 class Octree:
-    def __init__(self, init_resolution: int, max_resolution_levels: int, roh: float) -> None:
+    def __init__(self, init_resolution: int, max_resolution_levels: int) -> None:
         self._init_res = init_resolution
         self._max_level = max_resolution_levels
-        self._roh = roh
     
     def _build_init_res(self, vertices: torch.Tensor):
         obj_start = vertices.min(axis=0).values
@@ -210,7 +209,7 @@ class Octree:
         tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
 
-        self._plot(tree_tensor)
+        # self._plot(tree_tensor)
         return tree_tensor
 
     def _plot(self, tree_tensor):
