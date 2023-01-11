@@ -5,13 +5,19 @@ import numpy as np
 from scipy.sparse.csgraph import laplacian
 import matplotlib.pyplot as plt
 from torch.optim import Adam
+import nlopt
+import wandb
+from functools import partial
 
 
 class QPOptimizer:
     def __init__(self, name, args) -> None:
         self.iter=0
+        self.name=name
         if name == "Adam":
-            self._opt = Adam(**args)
+            self._opt = partial(Adam,**args)
+        elif name == "nlopt":
+            self._opt = partial(nlopt.opt, nlopt.LN_COBYLA)
         else:
             raise NotImplementedError("Only Adam implemented")
 
@@ -27,13 +33,52 @@ class QPOptimizer:
     def _constraint_s_yz(self, s_total):
         return s_total[SVector.YZ]
     
-    def __call__(self, beta: torch.Tensor, s_total: torch.Tensor, loss_score: torch.Tensor):
-        bounds = [(0, 1)] * len(beta)
-        problem = [{'type': 'eq', 'fun': self._constraint_s_x, 'args':(s_total,)},           
-                    {'type': 'eq', 'fun': self._constraint_s_y, 'args':(s_total,)},
-                    {'type': 'eq', 'fun': self._constraint_s_xz, 'args':(s_total,)},
-                    {'type': 'eq', 'fun': self._constraint_s_yz, 'args':(s_total,)}]
+    def _run_nlopt(self, beta: torch.Tensor, s_total: torch.Tensor, loss_score: torch.Tensor):
+        opt =self._opt(len(beta))
+        tolerance = 1e-6
+        opt.set_lower_bounds(np.zeros(beta.shape))
+        opt.set_upper_bounds(np.ones(beta.shape))
 
-        result = minimize(self.loss, beta, bounds=bounds, constraints=problem, method='SLSQP', args=(tree_tensor,), options={'disp': True})
-        print(result)
-        tree_tensor = OctreeTensorHandler.set_internal_beta(tree_tensor, result.x)
+        opt.add_equality_constraint(self._constraint_s_x, tolerance)
+        opt.add_equality_constraint(self._constraint_s_y, tolerance)
+        opt.add_equality_constraint(self._constraint_s_xz, tolerance)
+        opt.add_equality_constraint(self._constraint_s_yz, tolerance)
+
+        # self.octree = octree
+
+        opt.set_min_objective(self.loss)
+        opt.set_maxeval(len(beta)+50)
+        # opt.set_xtol_abs(0.1)
+        optimal_beta = opt.optimize(beta)
+        print('finished optimization step')
+
+    
+    def __call__(self, beta: torch.Tensor, s_total: torch.Tensor, loss_score: torch.Tensor):
+        if self.name=="Adam":
+            raise NotImplementedError('implement Adam')
+        elif self.name=="nlopt":
+            self._run_nlopt(beta, s_total, loss_score)
+        else:
+            raise NotImplementedError('unknown optimizer')
+
+        # wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt', 'tolerance': self.tolerance})
+
+        # wandb.log({
+        #             'min_beta': internal_beta.min(),
+        #             'max_beta': internal_beta.max(),
+        #             'I_a': I_a,
+        #             'I_b': I_b,
+        #             'I_c': I_c,
+        #             's_1': s_total['s_1'],
+        #             's_x': s_total['s_x'],
+        #             's_y': s_total['s_y'],
+        #             's_z': s_total['s_z'],
+        #             's_xx': s_total['s_xx'],
+        #             's_yy': s_total['s_yy'],
+        #             's_zz': s_total['s_zz'],
+        #             's_xy': s_total['s_xy'],
+        #             's_xz': s_total['s_xz'],
+        #             's_yz': s_total['s_yz'],
+        #             'f_yoyo': f_yoyo,
+        #             'f_top': f_top,
+        #             })

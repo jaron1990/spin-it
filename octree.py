@@ -223,23 +223,23 @@ class Octree:
             
             x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
             z = np.ones(x.shape) * z0
-            ax.plot_surface(x, y, z, color='b')
+            ax.plot_surface(x, y, z, color='b', alpha=0.6)
 
             x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
             z = np.ones(x.shape) * z1
-            ax.plot_surface(x, y, z, color='b')
+            ax.plot_surface(x, y, z, color='b', alpha=0.6)
 
             x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
             y = np.ones(x.shape) * y0
-            ax.plot_surface(x, y, z, color='b')
+            ax.plot_surface(x, y, z, color='b', alpha=0.6)
 
             x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
             y = np.ones(x.shape) * y1
-            ax.plot_surface(x, y, z, color='b')
+            ax.plot_surface(x, y, z, color='b', alpha=0.6)
 
             y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
             x = np.ones(y.shape) * x0
-            ax.plot_surface(x, y, z, color='b')
+            ax.plot_surface(x, y, z, color='b', alpha=0.6)
 
             y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
             x = np.ones(y.shape) * x1
@@ -251,23 +251,23 @@ class Octree:
             
             x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
             z = np.ones(x.shape) * z0
-            ax.plot_surface(x, y, z, color='r')
+            ax.plot_surface(x, y, z, color='r', alpha=0.3)
 
             x, y = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(y0, y1, 2))
             z = np.ones(x.shape) * z1
-            ax.plot_surface(x, y, z, color='r')
+            ax.plot_surface(x, y, z, color='r', alpha=0.3)
 
             x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
             y = np.ones(x.shape) * y0
-            ax.plot_surface(x, y, z, color='r')
+            ax.plot_surface(x, y, z, color='r', alpha=0.3)
 
             x, z = np.meshgrid(np.linspace(x0, x1, 2), np.linspace(z0, z1, 2))
             y = np.ones(x.shape) * y1
-            ax.plot_surface(x, y, z, color='r')
+            ax.plot_surface(x, y, z, color='r', alpha=0.3)
 
             y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
             x = np.ones(y.shape) * x0
-            ax.plot_surface(x, y, z, color='r')
+            ax.plot_surface(x, y, z, color='r', alpha=0.3)
 
             y, z = np.meshgrid(np.linspace(y0, y1, 2), np.linspace(z0, z1, 2))
             x = np.ones(y.shape) * x1
