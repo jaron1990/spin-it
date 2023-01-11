@@ -2,7 +2,9 @@ import argparse
 import yaml
 from octree import Octree, OctreeTensorHandler
 from mesh_obj import MeshObj
+from loss import SpinItLoss
 from optimizer import QPOptimizer
+import torch
 
 
 def parse_args():
@@ -12,14 +14,28 @@ def parse_args():
 
 
 class SpinIt:
-    def __init__(self, octree_configs, optimizer_configs) -> None:
+    def __init__(self, octree_configs, optimizer_configs, loss_configs) -> None:
         self._octree_obj = Octree(**octree_configs)
+        self._loss = SpinItLoss(**loss_configs)
         self._optimizer = QPOptimizer(**optimizer_configs)
+    
+    def _calc_total_s(self, s_internal: torch.Tensor, s_boundary: torch.Tensor, internal_beta: torch.Tensor
+                      ) -> torch.Tensor:
+        s_internal_total = (s_internal.mul(internal_beta, axis=0)).sum()
+        s_boundary_total = s_boundary.sum()
+        return s_internal_total + s_boundary_total
     
     def run(self, mesh_obj: MeshObj):
         octree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
-        boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
-        opt_int_df = self._optimizer(octree_tensor, mesh_obj.roh)
+        # boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
+        
+        tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
+        s_internal = OctreeTensorHandler.get_internal_s_vector(octree_tensor)
+        s_boundary = OctreeTensorHandler.get_boundary_s_vector(octree_tensor)
+        internal_beta = OctreeTensorHandler.get_internal_beta(octree_tensor)
+        s_total = self._calc_total_s(s_internal, s_boundary, internal_beta)
+        loss_score = self._loss(s_total)
+        opt_int_df = self._optimizer(internal_beta, s_total, loss_score)
         # TODO: concat boundary_df, opt_int_df
 
 
