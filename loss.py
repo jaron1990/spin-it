@@ -1,19 +1,6 @@
 import torch
 import torch.nn as nn
-from octree import OctreeTensorMapping
-
-
-class SVector:
-    ONE = OctreeTensorMapping.S_1 - OctreeTensorMapping.S_1
-    X = OctreeTensorMapping.S_X - OctreeTensorMapping.S_1
-    Y = OctreeTensorMapping.S_Y - OctreeTensorMapping.S_1
-    Z = OctreeTensorMapping.S_Z - OctreeTensorMapping.S_1
-    XY = OctreeTensorMapping.S_XY - OctreeTensorMapping.S_1
-    XZ = OctreeTensorMapping.S_XZ - OctreeTensorMapping.S_1
-    YZ = OctreeTensorMapping.S_YZ - OctreeTensorMapping.S_1
-    XX = OctreeTensorMapping.S_XX - OctreeTensorMapping.S_1
-    YY = OctreeTensorMapping.S_YY - OctreeTensorMapping.S_1
-    ZZ = OctreeTensorMapping.S_ZZ - OctreeTensorMapping.S_1
+from utils import SVector
 
 
 class SpinItLoss(nn.Module):
@@ -22,11 +9,12 @@ class SpinItLoss(nn.Module):
         self._calc_type = calc_type
         self._gamma_i = gamma_i
         self._gamma_c = gamma_c
+        phi = torch.tensor([phi])
         self._R = torch.tensor([[torch.cos(phi), -torch.sin(phi)],
                                 [torch.sin(phi), torch.cos(phi)]])
     
     def forward(self, s: torch.Tensor) -> torch.Tensor:
-        I = torch.tensor([[s[SVector.YY], s[SVector.ZZ], -s[SVector.XY], -s[SVector.XZ]],
+        I = torch.tensor([[s[SVector.YY] + s[SVector.ZZ], -s[SVector.XY], -s[SVector.XZ]],
                           [-s[SVector.XY], s[SVector.XX] + s[SVector.ZZ], -s[SVector.YZ]],
                           [-s[SVector.XZ], -s[SVector.YZ], s[SVector.XX] + s[SVector.YY]]])
         I_CoM = I[:2,:2] - (s[SVector.Z]**2 / s[SVector.ONE]) * torch.eye(2)

@@ -2,14 +2,17 @@ object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
 octree:
-  init_resolution: 2
-  max_resolution_levels: 6
+  init_resolution: 10
+  max_resolution_levels: 2
 loss:
   phi: 0
   calc_type: "top" # "yoyo"
   gamma_i: 0.9
   gamma_c: 0.7
 optimizer:
-  name: Adam
+  # name: Adam
+  # args:
+  #   lr: 1e-3
+  name: "nlopt"
   args:
-    lr: 1e-3
+    algorithm: "LN_COBYLA"

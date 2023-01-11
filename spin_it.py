@@ -21,18 +21,18 @@ class SpinIt:
     
     def _calc_total_s(self, s_internal: torch.Tensor, s_boundary: torch.Tensor, internal_beta: torch.Tensor
                       ) -> torch.Tensor:
-        s_internal_total = (s_internal.mul(internal_beta, axis=0)).sum()
-        s_boundary_total = s_boundary.sum()
+        s_internal_total = (s_internal * internal_beta.unsqueeze(-1)).sum(axis=0)
+        s_boundary_total = s_boundary.sum(axis=0)
         return s_internal_total + s_boundary_total
     
     def run(self, mesh_obj: MeshObj):
-        octree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
+        tree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
         # boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
         
         tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
-        s_internal = OctreeTensorHandler.get_internal_s_vector(octree_tensor)
-        s_boundary = OctreeTensorHandler.get_boundary_s_vector(octree_tensor)
-        internal_beta = OctreeTensorHandler.get_internal_beta(octree_tensor)
+        s_internal = OctreeTensorHandler.get_internal_s_vector(tree_tensor)
+        s_boundary = OctreeTensorHandler.get_boundary_s_vector(tree_tensor)
+        internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor)
         s_total = self._calc_total_s(s_internal, s_boundary, internal_beta)
         loss_score = self._loss(s_total)
         opt_int_df = self._optimizer(internal_beta, s_total, loss_score)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         configs = yaml.safe_load(file)
     
-    spin_it = SpinIt(configs["octree"], configs["optimizer"])
+    spin_it = SpinIt(configs["octree"], configs["optimizer"], configs["loss"])
     mesh_obj = MeshObj(**configs["object"])
     new_obj = spin_it.run(mesh_obj)
     

@@ -2,33 +2,12 @@ from trimesh import Trimesh
 import torch
 import numpy as np
 import pandas as pd
-from utils import is_vertex_in_bbox, Location #, is_bbox_inside_mesh
+from utils import is_vertex_in_bbox, Location, OctreeTensorMapping
 from igl import fast_winding_number_for_meshes
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits import mplot3d
 
-
-class OctreeTensorMapping:
-    LVL = 0
-    BBOX_X0 = 1
-    BBOX_Y0 = 2
-    BBOX_Z0 = 3
-    BBOX_X1 = 4
-    BBOX_Y1 = 5
-    BBOX_Z1 = 6
-    LOC = 7
-    BETA = 8
-    S_1 = 9
-    S_X = 10
-    S_Y = 11
-    S_Z = 12
-    S_XY = 13
-    S_XZ = 14
-    S_YZ = 15
-    S_XX = 16
-    S_YY = 17
-    S_ZZ = 18
 
 
 class OctreeTensorHandler:
@@ -103,7 +82,7 @@ class OctreeTensorHandler:
                              OctreeTensorMapping.S_X, OctreeTensorMapping.S_Y, OctreeTensorMapping.S_Z,
                              OctreeTensorMapping.S_XY, OctreeTensorMapping.S_XZ, OctreeTensorMapping.S_YZ,
                              OctreeTensorMapping.S_XX, OctreeTensorMapping.S_YY, OctreeTensorMapping.S_ZZ])
-        cols_mask = torch.zeros_like(tree_tensor[0])
+        cols_mask = torch.zeros_like(tree_tensor[0], dtype=bool)
         cols_mask[cols] = True
         return tree_tensor[:, cols_mask]
 
@@ -129,7 +108,7 @@ class OctreeTensorHandler:
     def set_beta(tree_tensor: torch.Tensor, beta_vals: None | torch.Tensor = None) -> torch.Tensor:
         is_outside = OctreeTensorHandler.get_loc(tree_tensor) == Location.OUTSIDE
         if beta_vals is None:
-            beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([0.]))
+            beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([1.]))
             assert tree_tensor[0].shape[0] == OctreeTensorMapping.BETA
             return torch.cat((tree_tensor, beta_vals), axis=-1)
         tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals

@@ -8,6 +8,7 @@ from torch.optim import Adam
 import nlopt
 import wandb
 from functools import partial
+from utils import SVector
 
 
 class QPOptimizer:
@@ -15,9 +16,10 @@ class QPOptimizer:
         self.iter=0
         self.name=name
         if name == "Adam":
-            self._opt = partial(Adam,**args)
+            self._opt = partial(Adam, **args)
         elif name == "nlopt":
-            self._opt = partial(nlopt.opt, nlopt.LN_COBYLA)
+            algorithm = getattr(nlopt, args["algorithm"])
+            self._opt = partial(nlopt.opt, algorithm)
         else:
             raise NotImplementedError("Only Adam implemented")
 
@@ -33,8 +35,8 @@ class QPOptimizer:
     def _constraint_s_yz(self, s_total):
         return s_total[SVector.YZ]
     
-    def _run_nlopt(self, beta: torch.Tensor, s_total: torch.Tensor, loss_score: torch.Tensor):
-        opt =self._opt(len(beta))
+    def _run_nlopt(self, beta: torch.Tensor, s_total: torch.Tensor, loss: torch.Tensor):
+        opt = self._opt(len(beta))
         tolerance = 1e-6
         opt.set_lower_bounds(np.zeros(beta.shape))
         opt.set_upper_bounds(np.ones(beta.shape))
@@ -44,10 +46,8 @@ class QPOptimizer:
         opt.add_equality_constraint(self._constraint_s_xz, tolerance)
         opt.add_equality_constraint(self._constraint_s_yz, tolerance)
 
-        # self.octree = octree
-
-        opt.set_min_objective(self.loss)
-        opt.set_maxeval(len(beta)+50)
+        opt.set_min_objective(loss)
+        opt.set_maxeval(len(beta) + 50)
         # opt.set_xtol_abs(0.1)
         optimal_beta = opt.optimize(beta)
         print('finished optimization step')
