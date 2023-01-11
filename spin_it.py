@@ -1,7 +1,7 @@
 import argparse
 import yaml
 from octree import Octree, OctreeTensorHandler
-from io_utils import MeshObj
+from mesh_obj import MeshObj
 from optimizer import QPOptimizer
 
 
