@@ -136,7 +136,7 @@ class OctreeTensorHandler:
         return tree_tensor
 
     @staticmethod
-    def set_s_vector(tree_tensor, roh):
+    def calc_s_vector(tree_tensor, roh):
         p0 = OctreeTensorHandler.get_bbox_start(tree_tensor)
         p1 = OctreeTensorHandler.get_bbox_end(tree_tensor)
         size = OctreeTensorHandler.get_bbox_size(tree_tensor)

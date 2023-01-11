@@ -8,7 +8,7 @@ class MeshObj:
         self._roh = roh
     
     @property
-    def roh(self) -> float:
+    def rho(self) -> float:
         return self._roh
     
     @property
