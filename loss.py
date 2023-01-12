@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from utils import SVector
+from octree import OctreeTensorHandler
 
 
 class SpinItLoss(nn.Module):
@@ -13,7 +14,17 @@ class SpinItLoss(nn.Module):
         self._R = torch.tensor([[torch.cos(phi), -torch.sin(phi)],
                                 [torch.sin(phi), torch.cos(phi)]])
     
-    def forward(self, s: torch.Tensor) -> torch.Tensor:
+    def _calc_total_s(self, s_internal: torch.Tensor, s_boundary: torch.Tensor, internal_beta: torch.Tensor
+                      ) -> torch.Tensor:
+        s_internal_total = (s_internal * internal_beta.unsqueeze(-1)).sum(axis=0)
+        s_boundary_total = s_boundary.sum(axis=0)
+        return s_internal_total + s_boundary_total
+    
+    def forward(self, internal_beta, tree_tensor) -> torch.Tensor:
+        s_internal = OctreeTensorHandler.get_internal_s_vector(tree_tensor)
+        s_boundary = OctreeTensorHandler.get_boundary_s_vector(tree_tensor)
+        s = self._calc_total_s(s_internal, s_boundary, internal_beta)
+        
         I = torch.tensor([[s[SVector.YY] + s[SVector.ZZ], -s[SVector.XY], -s[SVector.XZ]],
                           [-s[SVector.XY], s[SVector.XX] + s[SVector.ZZ], -s[SVector.YZ]],
                           [-s[SVector.XZ], -s[SVector.YZ], s[SVector.XX] + s[SVector.YY]]])
