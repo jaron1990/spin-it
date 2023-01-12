@@ -3,7 +3,7 @@ object:
   roh: 1. # 1.17 g/cm^3
 octree:
   init_resolution: 2
-  max_resolution_levels: 4
+  max_resolution_levels: 3
 loss:
   phi: 0
   calc_type: "top" # "yoyo"

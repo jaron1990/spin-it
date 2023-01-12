@@ -67,7 +67,11 @@ class OctreeTensorHandler:
     @staticmethod
     def get_interior(tree_tensor: torch.Tensor) -> torch.Tensor:
         return tree_tensor[(OctreeTensorHandler.get_loc(tree_tensor) == Location.INSIDE).squeeze(-1)]
-    
+
+    @staticmethod
+    def get_exterior(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return tree_tensor[(OctreeTensorHandler.get_loc(tree_tensor) == Location.OUTSIDE).squeeze(-1)]
+
     @staticmethod
     def get_internal_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
         return OctreeTensorHandler.get_interior(tree_tensor)[:, OctreeTensorMapping.BETA]
@@ -111,7 +115,7 @@ class OctreeTensorHandler:
             beta_vals = torch.where(is_outside, torch.tensor([0.]), torch.tensor([1.]))
             assert tree_tensor[0].shape[0] == OctreeTensorMapping.BETA
             return torch.cat((tree_tensor, beta_vals), axis=-1)
-        tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals
+        tree_tensor[:, OctreeTensorMapping.BETA] = torch.tensor(beta_vals)
         return tree_tensor
 
     @staticmethod

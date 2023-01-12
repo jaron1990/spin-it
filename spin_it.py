@@ -27,7 +27,7 @@ class SpinIt:
         # boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
         
         for i in range(10):
-            print('split_iter: {i}')
+            print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
             tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
             internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor)
             optimal_beta = self._optimizer(internal_beta, tree_tensor, self._loss)
@@ -36,8 +36,21 @@ class SpinIt:
             OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
 
 
+            #split cells with beta inside (eps, 1-eps)
+            octree_external = OctreeTensorHandler.get_exterior(tree_tensor)
+            octree_boundary = OctreeTensorHandler.get_boundary(tree_tensor)
 
-        # TODO: concat boundary_df, opt_int_df
+            to_split = ((optimal_beta==0.) | (optimal_beta==1.))
+            octree_internal_no_split = OctreeTensorHandler.get_interior(tree_tensor)[to_split]
+            octree_to_split = OctreeTensorHandler.get_interior(tree_tensor)[~to_split]
+
+
+            #TODO: split octree_to_split and copy their fathers beta value
+            splitted_tree = 1
+            
+            new_octree_internal = torch.vstack((octree_external, octree_boundary, octree_internal_no_split, splitted_tree))
+
+            print(f'finished iter {i}. num_of_cells = {new_octree_internal.shape[0]}')
 
 
 if __name__ == "__main__":
