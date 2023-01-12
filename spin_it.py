@@ -6,6 +6,7 @@ from loss import SpinItLoss
 from optimizer import QPOptimizer
 import torch
 
+epsilon=0.1
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='Spin-it')
@@ -25,9 +26,17 @@ class SpinIt:
         tree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
         # boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
         
-        tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
-        internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor)
-        opt_int_df = self._optimizer(internal_beta, tree_tensor, self._loss)
+        for i in range(10):
+            print('split_iter: {i}')
+            tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
+            internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor)
+            optimal_beta = self._optimizer(internal_beta, tree_tensor, self._loss)
+            optimal_beta[optimal_beta>(1-epsilon)] = 1.
+            optimal_beta[optimal_beta<epsilon] = 0.
+            OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
+
+
+
         # TODO: concat boundary_df, opt_int_df
 
 

@@ -179,7 +179,12 @@ class Octree:
         return OctreeTensorHandler.stack_base_data(lvl, cell_start, cell_end, loc)
     
     def build_from_mesh(self, mesh_obj: Trimesh):
+        mesh_obj.vertices
         vertices = torch.tensor(mesh_obj.vertices)
+        vertices_max_abs = vertices.absolute().max()
+        mesh_obj.vertices /= vertices_max_abs
+        vertices = torch.tensor(mesh_obj.vertices)
+        
         tree_tensor = self._build_init_res(vertices)
         for _ in range(1, self._max_level):
             is_bound = OctreeTensorHandler.get_loc(tree_tensor).squeeze(-1) == Location.BOUNDARY
