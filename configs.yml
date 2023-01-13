@@ -1,3 +1,4 @@
+epsilon: 0.1
 object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
@@ -10,9 +11,10 @@ loss:
   gamma_i: 0.9
   gamma_c: 0.7
 optimizer:
-  # name: Adam
+  # name: "Adam"
   # args:
-  #   lr: 1e-3
+  #   lr: 0.001
   name: "nlopt"
   args:
     algorithm: "LN_COBYLA"
+    tolerance: 0.000001

@@ -10,8 +10,6 @@ from optimizer import QPOptimizer
 from model import SpinItModel
 
 
-epsilon=0.1
-
 def parse_args():
     parser = argparse.ArgumentParser(prog='Spin-it')
     parser.add_argument('-c', '--config', required=True, type=str, dest='config', help='Configurations file path')
@@ -19,10 +17,11 @@ def parse_args():
 
 
 class SpinIt:
-    def __init__(self, octree_configs, optimizer_configs, loss_configs) -> None:
+    def __init__(self, octree_configs, optimizer_configs, loss_configs, epsilon) -> None:
         self._octree_obj = Octree(**octree_configs)
         self._loss = SpinItLoss(**loss_configs)
         self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs, loss_configs)
+        self._epsilon = epsilon
     
     def _init_optimizer(self, optimizer_configs, loss_configs):
         name = optimizer_configs["name"].lower()
@@ -38,7 +37,7 @@ class SpinIt:
         opt = self._optimizer(model.parameters())
         iterations = 10 # TODO: change
         model.train()
-        for i in range(iterations):
+        for _ in range(iterations):
             opt.zero_grad()
             output = model(beta, tree_tensor) #.cuda()
             loss = self._loss(output, tree_tensor)
@@ -61,8 +60,8 @@ class SpinIt:
             else:
                 raise NotImplementedError()
             
-            optimal_beta[optimal_beta > 1 - epsilon] = 1.
-            optimal_beta[optimal_beta < epsilon] = 0.
+            optimal_beta[optimal_beta > 1 - self._epsilon] = 1.
+            optimal_beta[optimal_beta < self._epsilon] = 0.
             tree_tensor = OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
 
             #split cells with beta inside (eps, 1-eps)
@@ -84,7 +83,7 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         configs = yaml.safe_load(file)
     
-    spin_it = SpinIt(configs["octree"], configs["optimizer"], configs["loss"])
+    spin_it = SpinIt(configs["octree"], configs["optimizer"], configs["loss"], configs["epsilon"])
     mesh_obj = MeshObj(**configs["object"])
     new_obj = spin_it.run(mesh_obj)
     
