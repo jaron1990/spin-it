@@ -99,12 +99,10 @@ class OctreeTensorHandler:
         return OctreeTensorHandler.get_s_vector(OctreeTensorHandler.get_boundary(tree_tensor))
 
     @staticmethod
-    def calc_inner_outter_location(mesh_obj: Trimesh, tree_tensor: torch.Tensor) -> torch.Tensor:
+    def calc_inner_outter_location(vertices: torch.Tensor, faces: np.ndarray, tree_tensor: torch.Tensor) -> torch.Tensor:
         is_unknown = (OctreeTensorHandler.get_loc(tree_tensor) == Location.UNKNOWN).squeeze(-1)
         centers = OctreeTensorHandler.get_bbox_center(tree_tensor[is_unknown])
-        is_inner = fast_winding_number_for_meshes(np.array(mesh_obj.vertices), 
-                                                  np.array(mesh_obj.faces), 
-                                                  centers.numpy()) > 0.5
+        is_inner = fast_winding_number_for_meshes(vertices.numpy(), faces, centers.numpy()) > 0.5
         new_loc = torch.where(torch.tensor(is_inner), torch.tensor([Location.INSIDE]), torch.tensor([Location.OUTSIDE]))
         return OctreeTensorHandler.set_loc(tree_tensor, is_unknown, new_loc)
 
@@ -191,7 +189,7 @@ class Octree:
             is_bound = OctreeTensorHandler.get_loc(tree_tensor).squeeze(-1) == Location.BOUNDARY
             tree_tensor = torch.vstack((tree_tensor[~is_bound], 
                                         self._create_leaves_tensor(2, vertices, tree_tensor[is_bound])))
-        tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
+        tree_tensor = OctreeTensorHandler.calc_inner_outter_location(vertices, np.array(mesh_obj.faces), tree_tensor)
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
 
         # self._plot(tree_tensor)
