@@ -22,15 +22,15 @@ class SpinIt:
     def __init__(self, octree_configs, optimizer_configs, loss_configs) -> None:
         self._octree_obj = Octree(**octree_configs)
         self._loss = SpinItLoss(**loss_configs)
-        self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs)
+        self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs, loss_configs)
     
-    def _init_optimizer(self, optimizer_configs):
+    def _init_optimizer(self, optimizer_configs, loss_configs):
         name = optimizer_configs["name"].lower()
         args = optimizer_configs["args"]
         if name == "adam":
             opt = partial(Adam, **args)
         elif name == "nlopt":
-            opt = QPOptimizer(**args)
+            opt = QPOptimizer(**args, **loss_configs)
         return opt, name
     
     def _run_model(self, beta, tree_tensor):

@@ -12,8 +12,16 @@ from utils import SVector
 
 
 class QPOptimizer:
-    def __init__(self, algorithm) -> None:
+    def __init__(self, algorithm, phi, gamma_i, gamma_c, calc_type, tolerance) -> None:
         self._opt = partial(nlopt.opt, getattr(nlopt, algorithm))
+
+        phi = torch.tensor([phi])
+        self._R = torch.tensor([[torch.cos(phi), -torch.sin(phi)],
+                                [torch.sin(phi), torch.cos(phi)]])
+        self._gamma_i = gamma_i
+        self._gamma_c = gamma_c
+        self._calc_type = calc_type
+        self._tolerance = tolerance
 
     def _constraint_s_x(self, internal_beta, grad):
         s_internal = OctreeTensorHandler.get_internal_s_vector(self.tree_tensor)
@@ -63,53 +71,45 @@ class QPOptimizer:
             return f_yoyo
         f_top = self._gamma_c * (s[SVector.Z]**2) + f_yoyo
 
-        wandb.log({
-            'min_beta': internal_beta.min(),
-            'max_beta': internal_beta.max(),
-            'I_a': I_a,
-            'I_b': I_b,
-            'I_c': I_c,
-            'beta[0]': internal_beta[0],
-            'beta[1]': internal_beta[1],
-            'beta[2]': internal_beta[2],
-            'beta[3]': internal_beta[3],
-            'beta[4]': internal_beta[4],
-            's_1': s[SVector.ONE],
-            's_x': s[SVector.X],
-            's_y': s[SVector.Y],
-            's_z': s[SVector.Z],
-            's_xx': s[SVector.XX],
-            's_yy': s[SVector.YY],
-            's_zz': s[SVector.ZZ],
-            's_xy': s[SVector.XY],
-            's_xz': s[SVector.XZ],
-            's_yz': s[SVector.YZ],
-            'f_yoyo': f_yoyo,
-            'f_top': f_top,
-            })
+        # wandb.log({
+        #     'min_beta': internal_beta.min(),
+        #     'max_beta': internal_beta.max(),
+        #     'I_a': I_a,
+        #     'I_b': I_b,
+        #     'I_c': I_c,
+        #     'beta[0]': internal_beta[0],
+        #     'beta[1]': internal_beta[1],
+        #     'beta[2]': internal_beta[2],
+        #     'beta[3]': internal_beta[3],
+        #     'beta[4]': internal_beta[4],
+        #     's_1': s[SVector.ONE],
+        #     's_x': s[SVector.X],
+        #     's_y': s[SVector.Y],
+        #     's_z': s[SVector.Z],
+        #     's_xx': s[SVector.XX],
+        #     's_yy': s[SVector.YY],
+        #     's_zz': s[SVector.ZZ],
+        #     's_xy': s[SVector.XY],
+        #     's_xz': s[SVector.XZ],
+        #     's_yz': s[SVector.YZ],
+        #     'f_yoyo': f_yoyo,
+        #     'f_top': f_top,
+        #     })
 
         return f_top.item()        
     
     def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor):
-        wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
+        # wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
         self.tree_tensor = tree_tensor
-        phi = 0
-        phi = torch.tensor([phi])
-        self._R = torch.tensor([[torch.cos(phi), -torch.sin(phi)],
-                                [torch.sin(phi), torch.cos(phi)]])
-        self._gamma_i = 0.4
-        self._gamma_c = 0.5
-        self._calc_type = "top"
         
         opt = self._opt(len(beta))
-        tolerance = 1e-6
         opt.set_lower_bounds(np.zeros(beta.shape))
         opt.set_upper_bounds(np.ones(beta.shape))
 
-        opt.add_equality_constraint(self._constraint_s_x, tolerance)
-        opt.add_equality_constraint(self._constraint_s_y, tolerance)
-        opt.add_equality_constraint(self._constraint_s_xz, tolerance)
-        opt.add_equality_constraint(self._constraint_s_yz, tolerance)
+        opt.add_equality_constraint(self._constraint_s_x, self._tolerance)
+        opt.add_equality_constraint(self._constraint_s_y, self._tolerance)
+        opt.add_equality_constraint(self._constraint_s_xz, self._tolerance)
+        opt.add_equality_constraint(self._constraint_s_yz, self._tolerance)
 
         opt.set_min_objective(self._loss)
         opt.set_maxeval(len(beta)+100)
