@@ -98,7 +98,7 @@ class QPOptimizer:
 
         return f_top.item()        
     
-    def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor):
+    def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
         # wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
         self.tree_tensor = tree_tensor
         
@@ -114,7 +114,6 @@ class QPOptimizer:
         opt.set_min_objective(self._loss)
         opt.set_maxeval(len(beta)+100)
         # opt.set_xtol_abs(0.1)
-        optimal_beta = opt.optimize(beta.numpy())
-        return optimal_beta
+        return torch.tensor(opt.optimize(beta.numpy()))
 
 

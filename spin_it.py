@@ -47,6 +47,7 @@ class SpinIt:
     
     def run(self, mesh_obj: MeshObj):
         tree_tensor = self._octree_obj.build_from_mesh(mesh_obj)
+        tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
         
         for i in range(10):
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
@@ -55,7 +56,6 @@ class SpinIt:
             
             if self._opt_name == "adam":
                 self._run_model(internal_beta, tree_tensor)
-                
             elif self._opt_name == "nlopt":
                 optimal_beta = self._optimizer(internal_beta, tree_tensor)
             else:
@@ -63,24 +63,20 @@ class SpinIt:
             
             optimal_beta[optimal_beta > 1 - epsilon] = 1.
             optimal_beta[optimal_beta < epsilon] = 0.
-            OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
-
+            tree_tensor = OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
 
             #split cells with beta inside (eps, 1-eps)
             octree_external = OctreeTensorHandler.get_exterior(tree_tensor)
             octree_boundary = OctreeTensorHandler.get_boundary(tree_tensor)
 
-            to_split = ((optimal_beta==0.) | (optimal_beta==1.))
-            octree_internal_no_split = OctreeTensorHandler.get_interior(tree_tensor)[to_split]
-            octree_to_split = OctreeTensorHandler.get_interior(tree_tensor)[~to_split]
-
-
-            #TODO: split octree_to_split and copy their fathers beta value
-            splitted_tree = 1
+            to_split = ~((optimal_beta==0.) | (optimal_beta==1.))
+            octree_internal_no_split = OctreeTensorHandler.get_interior(tree_tensor)[~to_split]
+            octree_to_split = OctreeTensorHandler.get_interior(tree_tensor)[to_split]
+            splitted_tree = Octree.create_leaves_tensor(2, None, octree_to_split)
             
-            new_octree_internal = torch.vstack((octree_external, octree_boundary, octree_internal_no_split, splitted_tree))
+            tree_tensor = torch.vstack((octree_external, octree_boundary, octree_internal_no_split, splitted_tree))
 
-            print(f'finished iter {i}. num_of_cells = {new_octree_internal.shape[0]}')
+            print(f'finished iter {i}. num_of_cells = {tree_tensor.shape[0]}')
 
 
 if __name__ == "__main__":
