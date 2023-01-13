@@ -5,6 +5,7 @@ import pandas as pd
 from utils import is_vertex_in_bbox, Location, OctreeTensorMapping
 from igl import fast_winding_number_for_meshes
 import matplotlib.pyplot as plt
+from mesh_obj import MeshObj
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits import mplot3d
 
@@ -99,10 +100,10 @@ class OctreeTensorHandler:
         return OctreeTensorHandler.get_s_vector(OctreeTensorHandler.get_boundary(tree_tensor))
 
     @staticmethod
-    def calc_inner_outter_location(vertices: torch.Tensor, faces: np.ndarray, tree_tensor: torch.Tensor) -> torch.Tensor:
+    def calc_inner_outter_location(mesh_obj: MeshObj, tree_tensor: torch.Tensor) -> torch.Tensor:
         is_unknown = (OctreeTensorHandler.get_loc(tree_tensor) == Location.UNKNOWN).squeeze(-1)
         centers = OctreeTensorHandler.get_bbox_center(tree_tensor[is_unknown])
-        is_inner = fast_winding_number_for_meshes(vertices.numpy(), faces, centers.numpy()) > 0.5
+        is_inner = fast_winding_number_for_meshes(mesh_obj.vertices, mesh_obj.faces, centers.numpy()) > 0.5
         new_loc = torch.where(torch.tensor(is_inner), torch.tensor([Location.INSIDE]), torch.tensor([Location.OUTSIDE]))
         return OctreeTensorHandler.set_loc(tree_tensor, is_unknown, new_loc)
 
@@ -180,16 +181,14 @@ class Octree:
         loc = torch.where(is_in_bbox, torch.tensor([Location.BOUNDARY]), torch.tensor([Location.UNKNOWN])).unsqueeze(1)
         return OctreeTensorHandler.stack_base_data(lvl, cell_start, cell_end, loc)
     
-    def build_from_mesh(self, mesh_obj: Trimesh):
+    def build_from_mesh(self, mesh_obj: MeshObj):
         vertices = torch.tensor(mesh_obj.vertices)
-        vertices /= vertices.absolute().max()
-        
         tree_tensor = self._build_init_res(vertices)
         for _ in range(1, self._max_level):
             is_bound = OctreeTensorHandler.get_loc(tree_tensor).squeeze(-1) == Location.BOUNDARY
             tree_tensor = torch.vstack((tree_tensor[~is_bound], 
                                         self._create_leaves_tensor(2, vertices, tree_tensor[is_bound])))
-        tree_tensor = OctreeTensorHandler.calc_inner_outter_location(vertices, np.array(mesh_obj.faces), tree_tensor)
+        tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
 
         # self._plot(tree_tensor)

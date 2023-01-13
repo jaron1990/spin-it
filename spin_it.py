@@ -46,7 +46,7 @@ class SpinIt:
             opt.step()
     
     def run(self, mesh_obj: MeshObj):
-        tree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
+        tree_tensor = self._octree_obj.build_from_mesh(mesh_obj)
         
         for i in range(10):
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
@@ -61,8 +61,8 @@ class SpinIt:
             else:
                 raise NotImplementedError()
             
-            optimal_beta[optimal_beta>(1-epsilon)] = 1.
-            optimal_beta[optimal_beta<epsilon] = 0.
+            optimal_beta[optimal_beta > 1 - epsilon] = 1.
+            optimal_beta[optimal_beta < epsilon] = 0.
             OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
 
 
