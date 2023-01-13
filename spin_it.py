@@ -1,10 +1,14 @@
 import argparse
 import yaml
-from octree import Octree, OctreeTensorHandler
+import torch
+from functools import partial
+from torch.optim import Adam
 from mesh_obj import MeshObj
+from octree import Octree, OctreeTensorHandler
 from loss import SpinItLoss
 from optimizer import QPOptimizer
-import torch
+from model import SpinItModel
+
 
 epsilon=0.1
 
@@ -18,19 +22,45 @@ class SpinIt:
     def __init__(self, octree_configs, optimizer_configs, loss_configs) -> None:
         self._octree_obj = Octree(**octree_configs)
         self._loss = SpinItLoss(**loss_configs)
-        self._optimizer = QPOptimizer(**optimizer_configs)
+        self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs)
     
+    def _init_optimizer(self, optimizer_configs):
+        name = optimizer_configs["name"].lower()
+        args = optimizer_configs["args"]
+        if name == "adam":
+            opt = partial(Adam, **args)
+        elif name == "nlopt":
+            opt = QPOptimizer(**args)
+        return opt, name
     
+    def _run_model(self, beta, tree_tensor):
+        model = SpinItModel(beta.shape[0]).float()
+        opt = self._optimizer(model.parameters())
+        iterations = 10 # TODO: change
+        model.train()
+        for i in range(iterations):
+            opt.zero_grad()
+            output = model(beta, tree_tensor) #.cuda()
+            loss = self._loss(output, tree_tensor)
+            loss.backward()
+            opt.step()
     
     def run(self, mesh_obj: MeshObj):
         tree_tensor = self._octree_obj.build_from_mesh(mesh_obj.mesh)
-        # boundary_tensor = OctreeTensorHandler.get_boundary(octree_tensor)
         
         for i in range(10):
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
             tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
-            internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor)
-            optimal_beta = self._optimizer(internal_beta, tree_tensor, self._loss)
+            internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor).float()
+            
+            if self._opt_name == "adam":
+                self._run_model(internal_beta, tree_tensor)
+                
+            elif self._opt_name == "nlopt":
+                optimal_beta = self._optimizer(internal_beta, tree_tensor)
+            else:
+                raise NotImplementedError()
+            
             optimal_beta[optimal_beta>(1-epsilon)] = 1.
             optimal_beta[optimal_beta<epsilon] = 0.
             OctreeTensorHandler.set_internal_beta(tree_tensor, optimal_beta)
@@ -64,185 +94,3 @@ if __name__ == "__main__":
     
     output_path = args.file_path # TODO: change to new path
     # save_obj(new_obj, output_path)
-    
-# import numpy as np
-# # from utils.rujum_utils import get_shapes, get_safe_zone, update_center_of_mass, publish_results
-# from trimesh import Scene, Trimesh
-# import os
-# import utils
-# import balance
-# import itertools
-# import time
-# import datetime
-# from multiprocessing import Pool
-
-# from enum import Enum
-# class Location(Enum):
-#     INSIDE = 1
-#     OUTSIDE = 2
-#     BOUNDARY = 3
-#     UNKNOWN = 0
-
-# class octree_node:
-#     def __init__(self, point_start, size, shape: Trimesh, current_level = 0, max_level=7):
-#         start = datetime.datetime.now()
-        
-#         self.shape=shape
-#         self.current_level  = current_level
-#         self.max_level      = max_level
-#         self.location = Location.UNKNOWN
-
-#         self.point_start = point_start
-#         self.size = size
-#         self.point_end = self.point_start+self.size
-#         self.center = self.point_start+self.size/2
-
-#         self.combinations = list(itertools.product([0, 1], repeat=3))
-#         self.corners = self.point_start + self.size*self.combinations
-
-#         if current_level>=max_level:
-#             self.children=None
-#             if self.contains_vertices():
-#                 self.location=Location.BOUNDARY
-#             else:
-#                 if self.is_inside:
-#                     self.location=Location.INSIDE
-#                 else:
-#                     self.location=Location.OUTSIDE
-#         else:
-#             to_split = self.contains_vertices()
-
-#             if to_split:
-#                 self.location = Location.BOUNDARY
-#                 children_starts = self.point_start + self.size/2*self.combinations
-#                 self.children = []
-#                 for i in range(8):
-#                     self.children.append(octree_node(point_start=children_starts[i], size=self.size/2, shape=self.shape, current_level=self.current_level+1, max_level=self.max_level))
-
-#             else:
-#                 self.children=None
-#                 if self.is_inside():
-#                     self.location=Location.INSIDE
-#                 else:
-#                     self.location=Location.OUTSIDE
-
-#         end = datetime.datetime.now()
-
-#         if(self.current_level <=1):
-#             locations = self.count_locations()
-#             start_checks = datetime.datetime.now()
-#             leafs=self.num_of_leafs()
-#             inside=locations[0]
-#             outside=locations[1]
-#             boundary=locations[2]
-#             print(f"finished building tree of level {self.current_level}")
-#             print(f"num_of_leafs = {leafs}")
-#             print(f"num_inside = {inside}")
-#             print(f"num_outside = {outside}")
-#             print(f"num_boundary = {boundary}")
-#             print(f"level took {(end-start).total_seconds()} seconds")
-
-#             print()
-
-#     def is_inside(point):
-#         check_if_inside = True
-#         if check_if_inside:
-#             return fast_winding_number_for_meshes(np.array(shape.vertices), np.array(shape.faces), np.array([self.center])) > 0.5
-    
-#     def contains_vertices(self):
-#         points_gt_x_min = (self.shape.vertices[:,0] > self.point_start[0])
-#         points_lt_x_max = (self.shape.vertices[:,0] < self.point_end[0])
-#         points_gt_y_min = (self.shape.vertices[:,1] > self.point_start[1])
-#         points_lt_y_max = (self.shape.vertices[:,1] < self.point_end[1])
-#         points_gt_z_min = (self.shape.vertices[:,2] > self.point_start[2])
-#         points_lt_z_max = (self.shape.vertices[:,2] < self.point_end[2])
-
-#         points_in_x = np.logical_and(points_lt_x_max, points_gt_x_min)
-#         points_in_y = np.logical_and(points_lt_y_max, points_gt_y_min)
-#         points_in_z = np.logical_and(points_lt_z_max, points_gt_z_min)
-
-#         return np.logical_and(np.logical_and(points_in_x, points_in_y), points_in_z).any()
-
-#     def count_locations(self):
-#         if(self.is_leaf()):
-#             if self.location==Location.BOUNDARY:
-#                 return np.array([0,0,1])
-#             elif self.location==Location.INSIDE:
-#                 return np.array([1,0,0])
-#             elif self.location==Location.OUTSIDE:
-#                 return np.array([0,1,0])
-#             else:
-#                 throw("got to leaf with no location. BUG")
-            
-#         else:
-#             res = np.array([0,0,0])
-#             for child in self.children:
-#                 res += child.count_locations()
-#             return res
-            
-#     def is_leaf(self):
-#         return self.children==None
-
-#     def num_of_leafs(self):
-#         if(self.is_leaf()):
-#             return 1
-#         else:
-#             res = 0
-#             for child in self.children:
-#                 res += child.num_of_leafs()
-#             return res
-
-# def rujum_balance(src_dir, results_dir):
-#     """
-#     Balance a given rujum (stack of stones) based on the "make it stand" paper.
-#     :param src_dir: path to directory with stl files containing the stones.
-#     :param results_dir: path to output directory to save the balanced objects.
-#     :return: plot the balanced rujum, and save the stl files to print.
-#     """
-#     scene = Scene()
-#     shape = utils.get_shape(src_dir)  # list of shapes sorted from bottom to top
-
-#     # cell = octree_cell(np.array([1,-20,17]), np.array([0.1,0.1,0.1]), 0.2, 0)
-#     # cell_inside_mesh(cell, shape)
-#     # select spin axis - point
-  
-#     max_indices = np.array(np.max(shape.vertices, axis=0))
-#     min_indices = np.array(np.min(shape.vertices, axis=0))
-#     size = max_indices-min_indices
-#     volume = size.prod()
-#     print(f"volume is {volume}")
-
-#     graph = octree_node(point_start=min_indices, size=max_indices-min_indices, shape=shape, max_level=5)
-
-    #################################################
-    # balance.balance(shape) #, spin_axis)
-    
-    # cur_center_of_mass = {'location': np.array([0., 0., 0.]), 'mass': 0.}
-    # carved_shapes = []
-    # for shape_i, cur_shape, next_shape in zip(reversed(range(len(shapes))), reversed(shapes), reversed(next_shapes)):
-    #     print('='*50)
-    #     print('Processing shape [{}] (working top to bottom)'.format(shape_i))
-    #     cur_surface_area = get_safe_zone(cur_shape, next_shape, 0.5)
-    #     balanced_mesh = balance.balance(cur_shape, cur_surface_area, cur_center_of_mass, scene=scene)
-    #     cur_center_of_mass = update_center_of_mass(cur_center_of_mass, balanced_mesh)
-    #     carved_shapes.append(balanced_mesh)
-    # publish_results(carved_shapes, results_dir)
-    # test_res(scene)
-    # scene.show(scene)
-
-# def test_res(scene):
-#     import io
-#     from PIL import Image
-#     import matplotlib.pyplot as plt
-#     data = scene.save_image(resolution=(1080,1080))
-#     image = np.array(Image.open(io.BytesIO(data)))
-#     plt.imshow(image)
-#     plt.show()
-
-
-# if __name__ == '__main__':
-#     stl_path = "resources/balloon.stl"
-#     # src_dir = os.path.join('resources', rujum_name)
-#     results_dir = os.path.join('results', "orang")
-
-#     rujum_balance(stl_path, results_dir)

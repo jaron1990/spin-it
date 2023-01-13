@@ -12,18 +12,8 @@ from utils import SVector
 
 
 class QPOptimizer:
-    def __init__(self, name, args) -> None:
-        self.iter=0
-        self._name=name
-        if name == "Adam":
-            self._opt = partial(Adam, **args)
-        elif name == "nlopt":
-            algorithm = getattr(nlopt, args["algorithm"])
-            self._opt = partial(nlopt.opt, algorithm)
-        else:
-            raise NotImplementedError("Only Adam implemented")
-        
-
+    def __init__(self, algorithm) -> None:
+        self._opt = partial(nlopt.opt, getattr(nlopt, algorithm))
 
     def _constraint_s_x(self, internal_beta, grad):
         s_internal = OctreeTensorHandler.get_internal_s_vector(self.tree_tensor)
@@ -98,9 +88,9 @@ class QPOptimizer:
             'f_top': f_top,
             })
 
-        return f_top.item()
+        return f_top.item()        
     
-    def _run_nlopt(self, beta: torch.Tensor, tree_tensor: torch.Tensor, loss_func: torch.Tensor):        
+    def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor):
         wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
         self.tree_tensor = tree_tensor
         phi = 0
@@ -126,18 +116,5 @@ class QPOptimizer:
         # opt.set_xtol_abs(0.1)
         optimal_beta = opt.optimize(beta.numpy())
         return optimal_beta
-        
-    def _run_adam(self, beta, s_total, loss_score):
-        optim = self._opt(beta)
-        optim.zero_grad()
-        optim.step()
-    
-    def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor, loss_func):
-        if self._name=="Adam":
-            self._run_adam(beta, tree_tensor, loss_func)
-        elif self._name == "nlopt":
-            return self._run_nlopt(beta, tree_tensor, loss_func)
-        else:
-            raise NotImplementedError('unknown optimizer')
 
 
