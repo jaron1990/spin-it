@@ -1,4 +1,4 @@
-from trimesh import Trimesh
+from trimesh import voxel
 import torch
 import numpy as np
 import pandas as pd
@@ -126,15 +126,34 @@ class OctreeTensorHandler:
         tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals
         return tree_tensor
 
-    # @staticmethod
-    # def create_voxel_grid(tree_tensor: torch.Tensor):
-    #     inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
-    #     inside_tensor = inside_tensor.where(inside_tensor[:,OctreeTensorMapping.BETA]>0.5)
-    #     boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
-    #     # OctreeTensorHandler.
+    @staticmethod
+    def create_mesh(tree_tensor: torch.Tensor):
+        grid = OctreeTensorHandler.create_voxel_grid(tree_tensor)
+        return voxel.ops.matrix_to_marching_cubes(grid)
 
-    #     # return grid
+    @staticmethod
+    def create_voxel_grid(tree_tensor: torch.Tensor):
+        inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+        inside_tensor_filled = inside_tensor[inside_tensor[:,OctreeTensorMapping.BETA]>0.5]
+        boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
+
+        full_tensor = torch.vstack([inside_tensor_filled, boundary_tensor])
+        max_level = full_tensor[:,OctreeTensorMapping.LVL].max()
+        resolution = int(2**(max_level+1)) #this is the resolution on each axis (e.g max_level=3 => grid is (16x16x16))
+        grid_start_offset = OctreeTensorHandler.get_bbox_start(full_tensor).min(axis=0).values
+        grid_step = OctreeTensorHandler.get_bbox_size(full_tensor).min(axis=0).values
+
+        full_tensor_shift_to_grid_start = OctreeTensorHandler.get_bbox_start(full_tensor) - grid_start_offset
+        full_tensor_start_scaled_to_grid = (full_tensor_shift_to_grid_start / grid_step).to(int)
+        full_tensor_size_scaled = (OctreeTensorHandler.get_bbox_size(full_tensor)/grid_step).to(int)
+
+        grid = torch.zeros([resolution,resolution,resolution])
+        for start, size in zip(full_tensor_start_scaled_to_grid, full_tensor_size_scaled):
+            grid[start[0]:start[0]+size[0], start[1]:start[1]+size[1], start[2]:start[2]+size[2]] = 1
+
+        return grid
     
+
     @staticmethod
     def plot_slices(tree_tensor: torch.Tensor):
         OctreeTensorHandler.plot_2D_x(tree_tensor, 0)
@@ -368,7 +387,10 @@ class Octree:
         # self._plot_2D_x(tree_tensor, 0)
         # self._plot_2D_y(tree_tensor, 0)
         # self._plot_2D_z(tree_tensor, 0)
-        # voxel_grid = OctreeTensorHandler.create_voxel_grid(tree_tensor)
+        
+        # mesh = OctreeTensorHandler.create_mesh(tree_tensor)
+        # mesh.export('stuff.stl')
+
         return tree_tensor
 
     def _plot(self, tree_tensor):
