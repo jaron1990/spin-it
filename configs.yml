@@ -3,18 +3,19 @@ object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
 octree_configs:
-  init_resolution: 2
+  init_resolution: 10
   max_resolution_levels: 3
 loss_configs:
   phi: 0
   calc_type: "top" # "yoyo"
   gamma_i: 0.9
   gamma_c: 0.7
+  constraints_weights: [1000, 1000, 1000, 1000, 1000]
 optimizer_configs:
-  # name: "Adam"
-  # args:
-  #   lr: 0.001
-  name: "nlopt"
+  name: "Adam"
   args:
-    algorithm: "LN_COBYLA"
-    tolerance: 0.000001
+    lr: 0.001
+  # name: "nlopt"
+  # args:
+  #   algorithm: "LN_COBYLA"
+  #   tolerance: 0.000001

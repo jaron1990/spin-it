@@ -8,5 +8,5 @@ class SpinItModel(nn.Module):
         self._linear = nn.Linear(params_count, params_count)
         self._relu = nn.ReLU(inplace=True)
     
-    def forward(self, beta, tree_tensor):
+    def forward(self, beta):
         return torch.clamp(self._relu(self._linear(beta)), max=1)

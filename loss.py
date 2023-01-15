@@ -5,36 +5,35 @@ from octree import OctreeTensorHandler
 
 
 class SpinItLoss(nn.Module):
-    def __init__(self, phi, gamma_i, gamma_c, calc_type) -> None:
+    def __init__(self, phi: float, gamma_i: float, gamma_c: float, calc_type: str, constraints_weights: list[float]) -> None:
         super().__init__()
         self._calc_type = calc_type
         self._gamma_i = gamma_i
         self._gamma_c = gamma_c
+        self._constraints_weights = constraints_weights[:-1]
         phi = torch.tensor([phi])
-        self._R = torch.tensor([[torch.cos(phi), -torch.sin(phi)],
-                                [torch.sin(phi), torch.cos(phi)]])
+        cos = torch.cos(phi)
+        sin = torch.sin(phi)
+        self._R = torch.tensor([[cos, -sin],
+                                [sin, cos]])
+        self._phi_constraint = lambda x, y: (cos * sin * x + (cos**2 - sin**2) * y) * constraints_weights[-1]
     
-    def _calc_total_s(self, s_internal: torch.Tensor, s_boundary: torch.Tensor, internal_beta: torch.Tensor
-                      ) -> torch.Tensor:
-        s_internal_total = (s_internal * internal_beta.unsqueeze(-1)).sum(axis=0)
-        s_boundary_total = s_boundary.sum(axis=0)
-        return s_internal_total + s_boundary_total
+    def _calc_total_s(self, model_outputs: torch.Tensor, tree_tensor: torch.Tensor, stable_beta_mask: torch.Tensor,
+                      unstable_beta_mask: torch.Tensor) -> torch.Tensor:
+        s_unstable_total = (OctreeTensorHandler.get_s_vector(tree_tensor)[unstable_beta_mask] * model_outputs[..., None]
+                            ).sum(axis=0)
+        s_stable_total = OctreeTensorHandler.get_s_vector(tree_tensor)[stable_beta_mask].sum(axis=0)
+        s_boundary = OctreeTensorHandler.get_boundary_s_vector(tree_tensor).sum(axis=0)
+        return s_unstable_total + s_stable_total + s_boundary
     
-    def forward(self, model_outputs, tree_tensor) -> torch.Tensor:
-        beta_count = tree_tensor.shape[0]
-        beta = model_outputs[:beta_count]
-        constraints_weights = model_outputs[beta_count:]
-        
-        s_internal = OctreeTensorHandler.get_internal_s_vector(tree_tensor)
-        s_boundary = OctreeTensorHandler.get_boundary_s_vector(tree_tensor)
-        s = self._calc_total_s(s_internal, s_boundary, beta)
-        
-        constraints = [s[SVector.X] * constraints_weights[Constraints.X],
-                       s[SVector.Y] * constraints_weights[Constraints.Y],
-                       s[SVector.XZ] * constraints_weights[Constraints.XZ],
-                       s[SVector.YZ] * constraints_weights[Constraints.YZ]] # TODO: FIX
-                    #    s[SVector.X] * constraints_weights[Constraints.X]] 
-        
+    def _calc_constraints_loss(self, total_s):
+        constraints_vals = [total_s[SVector.X], total_s[SVector.Y], total_s[SVector.XZ], total_s[SVector.YZ]]
+        phi_contraint_val = (total_s[SVector.XX] - total_s[SVector.YY], total_s[SVector.XY])
+        weighted_constaints = sum([v * w for v, w in zip(constraints_vals, self._constraints_weights)])
+        return weighted_constaints + self._phi_constraint(*phi_contraint_val)
+    
+    def forward(self, model_outputs, tree_tensor, stable_beta_mask, unstable_beta_mask) -> torch.Tensor:
+        s = self._calc_total_s(model_outputs, tree_tensor, stable_beta_mask, unstable_beta_mask)
         I = torch.tensor([[s[SVector.YY] + s[SVector.ZZ], -s[SVector.XY], -s[SVector.XZ]],
                           [-s[SVector.XY], s[SVector.XX] + s[SVector.ZZ], -s[SVector.YZ]],
                           [-s[SVector.XZ], -s[SVector.YZ], s[SVector.XX] + s[SVector.YY]]])
@@ -48,4 +47,4 @@ class SpinItLoss(nn.Module):
         if self._calc_type == "yoyo":
             return f_yoyo
         f_top = self._gamma_c * (s[SVector.Z]**2) + f_yoyo
-        return f_top
+        return f_top + self._calc_constraints_loss(s)
