@@ -4,7 +4,8 @@ channels:
   - conda-forge
   - pytorch
 dependencies:
-  - python
+  - python==3.10
+  - pyyaml
   - trimesh
   - scipy
   - scikit-learn
@@ -16,3 +17,4 @@ dependencies:
   - cudatoolkit
   - nlopt
   - wandb
+  - matplotlib
