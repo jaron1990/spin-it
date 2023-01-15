@@ -8,7 +8,7 @@ from torch.optim import Adam
 import nlopt
 import wandb
 from functools import partial
-from utils import SVector
+from utils import SVector, OctreeTensorMapping
 
 
 class QPOptimizer:
@@ -71,35 +71,35 @@ class QPOptimizer:
             return f_yoyo
         f_top = self._gamma_c * (s[SVector.Z]**2) + f_yoyo
 
-        # wandb.log({
-        #     'min_beta': internal_beta.min(),
-        #     'max_beta': internal_beta.max(),
-        #     'I_a': I_a,
-        #     'I_b': I_b,
-        #     'I_c': I_c,
-        #     'beta[0]': internal_beta[0],
-        #     'beta[1]': internal_beta[1],
-        #     'beta[2]': internal_beta[2],
-        #     'beta[3]': internal_beta[3],
-        #     'beta[4]': internal_beta[4],
-        #     's_1': s[SVector.ONE],
-        #     's_x': s[SVector.X],
-        #     's_y': s[SVector.Y],
-        #     's_z': s[SVector.Z],
-        #     's_xx': s[SVector.XX],
-        #     's_yy': s[SVector.YY],
-        #     's_zz': s[SVector.ZZ],
-        #     's_xy': s[SVector.XY],
-        #     's_xz': s[SVector.XZ],
-        #     's_yz': s[SVector.YZ],
-        #     'f_yoyo': f_yoyo,
-        #     'f_top': f_top,
-        #     })
+        wandb.log({
+            'min_beta': internal_beta.min(),
+            'max_beta': internal_beta.max(),
+            'I_a': I_a,
+            'I_b': I_b,
+            'I_c': I_c,
+            'beta[0]': internal_beta[0],
+            'beta[1]': internal_beta[1],
+            'beta[2]': internal_beta[2],
+            'beta[3]': internal_beta[3],
+            'beta[4]': internal_beta[4],
+            's_1': s[SVector.ONE],
+            's_x': s[SVector.X],
+            's_y': s[SVector.Y],
+            's_z': s[SVector.Z],
+            's_xx': s[SVector.XX],
+            's_yy': s[SVector.YY],
+            's_zz': s[SVector.ZZ],
+            's_xy': s[SVector.XY],
+            's_xz': s[SVector.XZ],
+            's_yz': s[SVector.YZ],
+            'f_yoyo': f_yoyo,
+            'f_top': f_top,
+            })
 
         return f_top.item()        
     
     def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
-        # wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
+        wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
         self.tree_tensor = tree_tensor
         
         opt = self._opt(len(beta))
@@ -112,7 +112,7 @@ class QPOptimizer:
         opt.add_equality_constraint(self._constraint_s_yz, self._tolerance)
 
         opt.set_min_objective(self._loss)
-        opt.set_maxeval(len(beta)+100)
+        opt.set_maxeval(len(beta)//2)
         # opt.set_xtol_abs(0.1)
         return torch.tensor(opt.optimize(beta.numpy()))
 

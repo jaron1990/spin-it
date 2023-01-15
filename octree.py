@@ -6,6 +6,7 @@ from utils import is_vertex_in_bbox, Location, OctreeTensorMapping
 from igl import fast_winding_number_for_meshes
 import matplotlib.pyplot as plt
 from mesh_obj import MeshObj
+from matplotlib.patches import Rectangle
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits import mplot3d
 
@@ -125,6 +126,168 @@ class OctreeTensorHandler:
         tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals
         return tree_tensor
 
+    # @staticmethod
+    # def create_voxel_grid(tree_tensor: torch.Tensor):
+    #     inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+    #     inside_tensor = inside_tensor.where(inside_tensor[:,OctreeTensorMapping.BETA]>0.5)
+    #     boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
+    #     # OctreeTensorHandler.
+
+    #     # return grid
+    
+    @staticmethod
+    def plot_slices(tree_tensor: torch.Tensor):
+        OctreeTensorHandler.plot_2D_x(tree_tensor, 0)
+        OctreeTensorHandler.plot_2D_y(tree_tensor, 0)
+        OctreeTensorHandler.plot_2D_z(tree_tensor, 0)
+
+    @staticmethod
+    def plot_2D_x(self, tree_tensor, x_val):
+        inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+        boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
+
+        min_y = min(inside_tensor[:,OctreeTensorMapping.BBOX_Y0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_Y0].min())
+        max_y = max(inside_tensor[:,OctreeTensorMapping.BBOX_Y1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_Y1].max())
+        min_z = min(inside_tensor[:,OctreeTensorMapping.BBOX_Z0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_Z0].min())
+        max_z = max(inside_tensor[:,OctreeTensorMapping.BBOX_Z1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_Z1].max())
+
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        plt.xlim([min_y, max_y])
+        plt.ylim([min_z, max_z])
+        plt.xlabel('y')
+        plt.ylabel('z')
+
+        inside_x_start = inside_tensor[:,OctreeTensorMapping.BBOX_X0]
+        inside_x_end = inside_tensor[:,OctreeTensorMapping.BBOX_X1]
+        inside_cuts_x_val = (inside_x_start<=x_val) & (inside_x_end>x_val)
+        inside_tensor_cuts_x_val = inside_tensor[inside_cuts_x_val]
+        for inside_cell in inside_tensor_cuts_x_val:
+            ax.add_patch(Rectangle((inside_cell[OctreeTensorMapping.BBOX_Y0], inside_cell[OctreeTensorMapping.BBOX_Z0]),    #start_point
+                                    inside_cell[OctreeTensorMapping.BBOX_Y1]-inside_cell[OctreeTensorMapping.BBOX_Y0],      #size_y
+                                    inside_cell[OctreeTensorMapping.BBOX_Z1]-inside_cell[OctreeTensorMapping.BBOX_Z0],      #size_z
+                                    edgecolor = 'pink',
+                                    facecolor = 'blue',
+                                    fill=True,
+                                    lw=1,
+                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+            # plt.savefig(f"axial_x_{x_val}.png")
+
+            
+        boundary_x_start = boundary_tensor[:,OctreeTensorMapping.BBOX_X0]
+        boundary_x_end = boundary_tensor[:,OctreeTensorMapping.BBOX_X1]
+        boundary_cuts_x_val = (boundary_x_start<=x_val) & (boundary_x_end>x_val)
+        boundary_tensor_cuts_x_val = boundary_tensor[boundary_cuts_x_val]
+        for boundary_cell in boundary_tensor_cuts_x_val:
+            ax.add_patch(Rectangle((boundary_cell[OctreeTensorMapping.BBOX_Y0], boundary_cell[OctreeTensorMapping.BBOX_Z0]),    #start_point
+                                    boundary_cell[OctreeTensorMapping.BBOX_Y1]-boundary_cell[OctreeTensorMapping.BBOX_Y0],      #size_y
+                                    boundary_cell[OctreeTensorMapping.BBOX_Z1]-boundary_cell[OctreeTensorMapping.BBOX_Z0],      #size_z
+                                    edgecolor = 'black',
+                                    facecolor = 'red',
+                                    fill=True,
+                                    lw=1))
+            # plt.savefig(f"axial_x_{x_val}.png")
+
+        plt.savefig(f"axial_x_{x_val}.png")
+
+    def plot_2D_y(self, tree_tensor, y_val):
+        inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+        boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
+
+        min_x = min(inside_tensor[:,OctreeTensorMapping.BBOX_X0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_X0].min())
+        max_x = max(inside_tensor[:,OctreeTensorMapping.BBOX_X1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_X1].max())
+        min_z = min(inside_tensor[:,OctreeTensorMapping.BBOX_Z0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_Z0].min())
+        max_z = max(inside_tensor[:,OctreeTensorMapping.BBOX_Z1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_Z1].max())
+
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        plt.xlim([min_x, max_x])
+        plt.ylim([min_z, max_z])
+        plt.xlabel('x')
+        plt.ylabel('z')
+
+        inside_y_start = inside_tensor[:,OctreeTensorMapping.BBOX_Y0]
+        inside_y_end = inside_tensor[:,OctreeTensorMapping.BBOX_Y1]
+        inside_cuts_y_val = (inside_y_start<=y_val) & (inside_y_end>y_val)
+        inside_tensor_cuts_y_val = inside_tensor[inside_cuts_y_val]
+        for inside_cell in inside_tensor_cuts_y_val:
+            ax.add_patch(Rectangle((inside_cell[OctreeTensorMapping.BBOX_X0], inside_cell[OctreeTensorMapping.BBOX_Z0]),    #start_point
+                                    inside_cell[OctreeTensorMapping.BBOX_X1]-inside_cell[OctreeTensorMapping.BBOX_X0],      #size_x
+                                    inside_cell[OctreeTensorMapping.BBOX_Z1]-inside_cell[OctreeTensorMapping.BBOX_Z0],      #size_z
+                                    edgecolor = 'pink',
+                                    facecolor = 'blue',
+                                    fill=True,
+                                    lw=1,
+                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+            # plt.savefig(f"axial_y_{y_val}.png")
+
+            
+        boundary_y_start = boundary_tensor[:,OctreeTensorMapping.BBOX_Y0]
+        boundary_y_end = boundary_tensor[:,OctreeTensorMapping.BBOX_Y1]
+        boundary_cuts_y_val = (boundary_y_start<=y_val) & (boundary_y_end>y_val)
+        boundary_tensor_cuts_y_val = boundary_tensor[boundary_cuts_y_val]
+        for boundary_cell in boundary_tensor_cuts_y_val:
+            ax.add_patch(Rectangle((boundary_cell[OctreeTensorMapping.BBOX_X0], boundary_cell[OctreeTensorMapping.BBOX_Z0]),    #start_point
+                                    boundary_cell[OctreeTensorMapping.BBOX_X1]-boundary_cell[OctreeTensorMapping.BBOX_X0],      #size_x
+                                    boundary_cell[OctreeTensorMapping.BBOX_Z1]-boundary_cell[OctreeTensorMapping.BBOX_Z0],      #size_z
+                                    edgecolor = 'black',
+                                    facecolor = 'red',
+                                    fill=True,
+                                    lw=1))
+            # plt.savefig(f"axial_y_{y_val}.png")
+
+        plt.savefig(f"axial_y_{y_val}.png")
+
+    def plot_2D_z(self, tree_tensor, z_val):
+        inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
+        boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
+
+        min_y = min(inside_tensor[:,OctreeTensorMapping.BBOX_Y0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_Y0].min())
+        max_y = max(inside_tensor[:,OctreeTensorMapping.BBOX_Y1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_Y1].max())
+        min_x = min(inside_tensor[:,OctreeTensorMapping.BBOX_X0].min(), boundary_tensor[:,OctreeTensorMapping.BBOX_X0].min())
+        max_x = max(inside_tensor[:,OctreeTensorMapping.BBOX_X1].max(), boundary_tensor[:,OctreeTensorMapping.BBOX_X1].max())
+
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        plt.xlim([min_x, max_x])
+        plt.ylim([min_y, max_y])
+        plt.xlabel('x')
+        plt.ylabel('y')
+
+        inside_z_start = inside_tensor[:,OctreeTensorMapping.BBOX_Z0]
+        inside_z_end = inside_tensor[:,OctreeTensorMapping.BBOX_Z1]
+        inside_cuts_z_val = (inside_z_start<=z_val) & (inside_z_end>z_val)
+        inside_tensor_cuts_z_val = inside_tensor[inside_cuts_z_val]
+        for inside_cell in inside_tensor_cuts_z_val:
+            ax.add_patch(Rectangle((inside_cell[OctreeTensorMapping.BBOX_X0], inside_cell[OctreeTensorMapping.BBOX_Y0]),    #start_point
+                                    inside_cell[OctreeTensorMapping.BBOX_X1]-inside_cell[OctreeTensorMapping.BBOX_X0],      #size_x
+                                    inside_cell[OctreeTensorMapping.BBOX_Y1]-inside_cell[OctreeTensorMapping.BBOX_Y0],      #size_y
+                                    edgecolor = 'pink',
+                                    facecolor = 'blue',
+                                    fill=True,
+                                    lw=1,
+                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+            # plt.savefig(f"axial_z_{z_val}.png")
+
+            
+        boundary_z_start = boundary_tensor[:,OctreeTensorMapping.BBOX_Z0]
+        boundary_z_end = boundary_tensor[:,OctreeTensorMapping.BBOX_Z1]
+        boundary_cuts_z_val = (boundary_z_start<=z_val) & (boundary_z_end>z_val)
+        boundary_tensor_cuts_z_val = boundary_tensor[boundary_cuts_z_val]
+        for boundary_cell in boundary_tensor_cuts_z_val:
+            ax.add_patch(Rectangle((boundary_cell[OctreeTensorMapping.BBOX_X0], boundary_cell[OctreeTensorMapping.BBOX_Y0]),    #start_point
+                                    boundary_cell[OctreeTensorMapping.BBOX_X1]-boundary_cell[OctreeTensorMapping.BBOX_X0],      #size_x
+                                    boundary_cell[OctreeTensorMapping.BBOX_Y1]-boundary_cell[OctreeTensorMapping.BBOX_Y0],      #size_y
+                                    edgecolor = 'black',
+                                    facecolor = 'red',
+                                    fill=True,
+                                    lw=1))
+            # plt.savefig(f"axial_z_{z_val}.png")
+
+        plt.savefig(f"axial_z_{z_val}.png")
+
+
+
     @staticmethod
     def calc_s_vector(tree_tensor, roh):
         p0 = OctreeTensorHandler.get_bbox_start(tree_tensor)
@@ -202,6 +365,10 @@ class Octree:
                                         self.create_leaves_tensor(2, vertices, tree_tensor[is_bound])))
         tree_tensor = OctreeTensorHandler.calc_inner_outter_location(mesh_obj, tree_tensor)
         # self._plot(tree_tensor)
+        # self._plot_2D_x(tree_tensor, 0)
+        # self._plot_2D_y(tree_tensor, 0)
+        # self._plot_2D_z(tree_tensor, 0)
+        # voxel_grid = OctreeTensorHandler.create_voxel_grid(tree_tensor)
         return tree_tensor
 
     def _plot(self, tree_tensor):
@@ -265,4 +432,3 @@ class Octree:
             x = np.ones(y.shape) * x1
             ax.plot_surface(x, y, z, color='r')
         plt.savefig("boxes.png")
-        

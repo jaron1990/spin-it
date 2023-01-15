@@ -53,5 +53,5 @@ class SVector:
 
 def is_vertex_in_bbox(vertices: torch.Tensor, cell_start: torch.Tensor, cell_end: torch.Tensor):
     vertices = vertices.unsqueeze(1)
-    log_and = torch.bitwise_and(vertices > cell_start[None], vertices < cell_end[None])
+    log_and = torch.bitwise_and(vertices >= cell_start[None], vertices <= cell_end[None])
     return torch.bitwise_and(torch.bitwise_and(log_and[..., 0], log_and[..., 1]), log_and[..., 2]).any(axis=0)
