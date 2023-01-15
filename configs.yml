@@ -2,15 +2,15 @@ epsilon: 0.1
 object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
-octree:
+octree_configs:
   init_resolution: 2
   max_resolution_levels: 3
-loss:
+loss_configs:
   phi: 0
   calc_type: "top" # "yoyo"
   gamma_i: 0.9
   gamma_c: 0.7
-optimizer:
+optimizer_configs:
   # name: "Adam"
   # args:
   #   lr: 0.001

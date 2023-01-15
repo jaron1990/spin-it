@@ -83,8 +83,8 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         configs = yaml.safe_load(file)
     
-    spin_it = SpinIt(configs["octree"], configs["optimizer"], configs["loss"], configs["epsilon"])
-    mesh_obj = MeshObj(**configs["object"])
+    mesh_obj = MeshObj(**configs.pop("object"))
+    spin_it = SpinIt(**configs) #["octree"], configs["optimizer"], configs["loss"], configs["epsilon"], confi)
     new_obj = spin_it.run(mesh_obj)
     
     output_path = args.file_path # TODO: change to new path

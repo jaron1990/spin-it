@@ -8,6 +8,14 @@ class Location:
     BOUNDARY = 3
 
 
+class Constraints:
+    X = 0
+    Y = 1
+    XZ = 2
+    YZ = 3
+    EQ = 4
+
+
 class OctreeTensorMapping:
     LVL = 0
     BBOX_X0 = 1

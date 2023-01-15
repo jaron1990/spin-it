@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import SVector
+from utils import SVector, Constraints
 from octree import OctreeTensorHandler
 
 
@@ -20,10 +20,20 @@ class SpinItLoss(nn.Module):
         s_boundary_total = s_boundary.sum(axis=0)
         return s_internal_total + s_boundary_total
     
-    def forward(self, internal_beta, tree_tensor) -> torch.Tensor:
+    def forward(self, model_outputs, tree_tensor) -> torch.Tensor:
+        beta_count = tree_tensor.shape[0]
+        beta = model_outputs[:beta_count]
+        constraints_weights = model_outputs[beta_count:]
+        
         s_internal = OctreeTensorHandler.get_internal_s_vector(tree_tensor)
         s_boundary = OctreeTensorHandler.get_boundary_s_vector(tree_tensor)
-        s = self._calc_total_s(s_internal, s_boundary, internal_beta)
+        s = self._calc_total_s(s_internal, s_boundary, beta)
+        
+        constraints = [s[SVector.X] * constraints_weights[Constraints.X],
+                       s[SVector.Y] * constraints_weights[Constraints.Y],
+                       s[SVector.XZ] * constraints_weights[Constraints.XZ],
+                       s[SVector.YZ] * constraints_weights[Constraints.YZ]] # TODO: FIX
+                    #    s[SVector.X] * constraints_weights[Constraints.X]] 
         
         I = torch.tensor([[s[SVector.YY] + s[SVector.ZZ], -s[SVector.XY], -s[SVector.XZ]],
                           [-s[SVector.XY], s[SVector.XX] + s[SVector.ZZ], -s[SVector.YZ]],
@@ -38,9 +48,4 @@ class SpinItLoss(nn.Module):
         if self._calc_type == "yoyo":
             return f_yoyo
         f_top = self._gamma_c * (s[SVector.Z]**2) + f_yoyo
-        # print(f'iter={self.iter}')
-        # self.iter+=1
-        # print(f'min_beta={internal_beta.min()}, max_beta={internal_beta.max()}')
-        # print(f'Ia/Ic={I_a/I_c}, Ib/Ic={I_b/I_c}')
-        # print(f'f_top={f_top}')
         return f_top
