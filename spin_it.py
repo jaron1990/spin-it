@@ -53,7 +53,7 @@ class SpinIt:
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
         
         for i in range(10):
-            OctreeTensorHandler.plot_slices(tree_tensor, i)
+            OctreeTensorHandler.plot_slices(tree_tensor)
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
             tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
             # internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor).float()
@@ -70,6 +70,9 @@ class SpinIt:
             optimal_beta[optimal_beta > 1 - self._epsilon] = 1.
             optimal_beta[optimal_beta < self._epsilon] = 0.
             tree_tensor = OctreeTensorHandler.set_beta(tree_tensor, unstable_beta_mask, optimal_beta)
+
+            OctreeTensorHandler.plot_slices(tree_tensor)
+
 
             #split cells with beta inside (eps, 1-eps)
             octree_external = OctreeTensorHandler.get_exterior(tree_tensor)
