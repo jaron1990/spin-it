@@ -5,7 +5,7 @@ from functools import partial
 from torch.optim import Adam
 from mesh_obj import MeshObj
 from octree import Octree, OctreeTensorHandler
-from loss import SpinItLoss
+from loss import SpinItLoss, SpinItLossYaron
 from optimizer import QPOptimizer
 from model import SpinItModel, SpinItModelYaron
 from utils import OctreeTensorMapping, Location
@@ -21,7 +21,7 @@ def parse_args():
 class SpinIt:
     def __init__(self, octree_configs, optimizer_configs, loss_configs, epsilon) -> None:
         self._octree_obj = Octree(**octree_configs)
-        self._loss = SpinItLoss(**loss_configs)
+        self._loss = SpinItLossYaron(**loss_configs)
         self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs, loss_configs)
         self._epsilon = epsilon
     
@@ -39,24 +39,25 @@ class SpinIt:
         beta = OctreeTensorHandler.get_beta(tree_tensor)[unstable_beta_mask].double()
         model = SpinItModelYaron(beta)
         opt = self._optimizer(model.parameters())
-        iterations = 3 # TODO: change
+        iterations = 1000 # TODO: change
         model.train()
         for i in range(iterations):
             opt.zero_grad()
-            s_unstable = tree_tensor[unstable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
+            s_unstable = tree_tensor[unstable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ+1]
             cells_boundary = tree_tensor[tree_tensor[:,OctreeTensorMapping.LOC]==Location.BOUNDARY]
-            s_boundary = cells_boundary[:,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
-            s_stable = tree_tensor[stable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
+            s_boundary = cells_boundary[:,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ+1]
+            s_stable = tree_tensor[stable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ+1]
             beta_stable = tree_tensor[stable_beta_mask,OctreeTensorMapping.BETA]
             s_stable_total = (s_stable.T)*beta_stable
             if s_stable_total.shape[1]==0:
-                s_stable_total = torch.zeros((1,9))
+                s_stable_total = torch.zeros((1,10))
             s_rest = s_stable_total.sum(axis=1) + s_boundary.sum(axis=0)
             output = model(s_unstable, s_rest) #.cuda()
-            print(f"iter {i}: {output}")
-            loss = self._loss(output, tree_tensor, stable_beta_mask, unstable_beta_mask)
+            loss = self._loss(output, model._beta)
             loss.backward()
             opt.step()
+            print(f"iter {i}: loss={loss.item()}, \nbeta[:10]={model._beta[:10]}")
+            # print(f'finished iteration {i}/{iterations}')
         return output.detach()
     
     def run(self, mesh_obj: MeshObj):
