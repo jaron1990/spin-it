@@ -1,7 +1,6 @@
 from trimesh import voxel
 import torch
 import numpy as np
-import pandas as pd
 from utils import is_vertex_in_bbox, Location, OctreeTensorMapping
 from igl import fast_winding_number_for_meshes
 import matplotlib.pyplot as plt
@@ -81,6 +80,19 @@ class OctreeTensorHandler:
     @staticmethod
     def get_internal_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
         return OctreeTensorHandler.get_interior(tree_tensor)[:, OctreeTensorMapping.BETA]
+    
+    @staticmethod
+    def get_beta(tree_tensor: torch.Tensor) -> torch.Tensor:
+        return tree_tensor[:, OctreeTensorMapping.BETA]
+
+    @staticmethod
+    def get_interior_beta_mask(tree_tensor: torch.Tensor, eps: float) -> torch.Tensor:
+        betas = tree_tensor[:, OctreeTensorMapping.BETA]
+        stable_beta_mask = (betas <= eps) & (betas >= 1 - eps)
+        interior_mask = tree_tensor[:, OctreeTensorMapping.LOC] == Location.INSIDE
+        interior_stable_mask = stable_beta_mask & interior_mask
+        interior_unstable_mask = (~stable_beta_mask) & interior_mask
+        return interior_stable_mask, interior_unstable_mask
 
     @staticmethod
     def set_internal_beta(tree_tensor: torch.Tensor, internal_beta: torch.Tensor) -> torch.Tensor:
@@ -115,7 +127,8 @@ class OctreeTensorHandler:
         return OctreeTensorHandler.set_loc(tree_tensor, is_unknown, new_loc)
 
     @staticmethod
-    def set_beta(tree_tensor: torch.Tensor, beta_vals: None | torch.Tensor = None) -> torch.Tensor:
+    def set_beta(tree_tensor: torch.Tensor, mask: torch.Tensor | None = None, beta_vals: None | torch.Tensor = None
+                 ) -> torch.Tensor:
         if beta_vals is None:
             is_outside = OctreeTensorHandler.get_loc(tree_tensor) == Location.OUTSIDE
             curr_beta = tree_tensor[:, OctreeTensorMapping.BETA]
@@ -123,7 +136,9 @@ class OctreeTensorHandler:
             
             is_boundary = OctreeTensorHandler.get_loc(tree_tensor) == Location.BOUNDARY
             beta_vals = torch.where(is_boundary, torch.tensor([1.]), beta_vals)
-        tree_tensor[:, OctreeTensorMapping.BETA] = beta_vals
+        if mask is None:
+            mask = torch.ones_like(tree_tensor[:,0], dtype=bool)
+        tree_tensor[mask, OctreeTensorMapping.BETA] = beta_vals
         return tree_tensor
 
     @staticmethod
