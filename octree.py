@@ -88,7 +88,7 @@ class OctreeTensorHandler:
     @staticmethod
     def get_interior_beta_mask(tree_tensor: torch.Tensor, eps: float) -> torch.Tensor:
         betas = tree_tensor[:, OctreeTensorMapping.BETA]
-        stable_beta_mask = (betas <= eps) & (betas >= 1 - eps)
+        stable_beta_mask = (betas <= eps) | (betas >= 1 - eps)
         interior_mask = tree_tensor[:, OctreeTensorMapping.LOC] == Location.INSIDE
         interior_stable_mask = stable_beta_mask & interior_mask
         interior_unstable_mask = (~stable_beta_mask) & interior_mask
@@ -170,13 +170,13 @@ class OctreeTensorHandler:
     
 
     @staticmethod
-    def plot_slices(tree_tensor: torch.Tensor):
-        OctreeTensorHandler.plot_2D_x(tree_tensor, 0)
-        OctreeTensorHandler.plot_2D_y(tree_tensor, 0)
-        OctreeTensorHandler.plot_2D_z(tree_tensor, 0)
+    def plot_slices(tree_tensor: torch.Tensor, iteration=0):
+        OctreeTensorHandler.plot_2D_x(tree_tensor, x_val=0, iteration=iteration)
+        OctreeTensorHandler.plot_2D_y(tree_tensor, y_val=0, iteration=iteration)
+        OctreeTensorHandler.plot_2D_z(tree_tensor, z_val=0, iteration=iteration)
 
     @staticmethod
-    def plot_2D_x(self, tree_tensor, x_val):
+    def plot_2D_x(tree_tensor, x_val, iteration=0):
         inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
         boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
 
@@ -204,7 +204,7 @@ class OctreeTensorHandler:
                                     facecolor = 'blue',
                                     fill=True,
                                     lw=1,
-                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+                                    alpha=inside_cell[OctreeTensorMapping.BETA].item()))
             # plt.savefig(f"axial_x_{x_val}.png")
 
             
@@ -222,9 +222,9 @@ class OctreeTensorHandler:
                                     lw=1))
             # plt.savefig(f"axial_x_{x_val}.png")
 
-        plt.savefig(f"axial_x_{x_val}.png")
+        plt.savefig(f"axial_x_{x_val}_iter_{iteration}.png")
 
-    def plot_2D_y(self, tree_tensor, y_val):
+    def plot_2D_y(tree_tensor, y_val, iteration=0):
         inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
         boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
 
@@ -252,7 +252,7 @@ class OctreeTensorHandler:
                                     facecolor = 'blue',
                                     fill=True,
                                     lw=1,
-                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+                                    alpha=inside_cell[OctreeTensorMapping.BETA].item()))
             # plt.savefig(f"axial_y_{y_val}.png")
 
             
@@ -270,9 +270,9 @@ class OctreeTensorHandler:
                                     lw=1))
             # plt.savefig(f"axial_y_{y_val}.png")
 
-        plt.savefig(f"axial_y_{y_val}.png")
+        plt.savefig(f"axial_y_{y_val}_iter_{iteration}.png")
 
-    def plot_2D_z(self, tree_tensor, z_val):
+    def plot_2D_z(tree_tensor, z_val, iteration=0):
         inside_tensor = OctreeTensorHandler.get_interior(tree_tensor)
         boundary_tensor = OctreeTensorHandler.get_boundary(tree_tensor)
 
@@ -300,7 +300,7 @@ class OctreeTensorHandler:
                                     facecolor = 'blue',
                                     fill=True,
                                     lw=1,
-                                    alpha=inside_cell[OctreeTensorMapping.BETA]))
+                                    alpha=inside_cell[OctreeTensorMapping.BETA].item()))
             # plt.savefig(f"axial_z_{z_val}.png")
 
             
@@ -318,7 +318,7 @@ class OctreeTensorHandler:
                                     lw=1))
             # plt.savefig(f"axial_z_{z_val}.png")
 
-        plt.savefig(f"axial_z_{z_val}.png")
+        plt.savefig(f"axial_z_{z_val}_iter_{iteration}.png")
 
 
 

@@ -7,7 +7,9 @@ from mesh_obj import MeshObj
 from octree import Octree, OctreeTensorHandler
 from loss import SpinItLoss
 from optimizer import QPOptimizer
-from model import SpinItModel
+from model import SpinItModel, SpinItModelYaron
+from utils import OctreeTensorMapping, Location
+
 
 
 def parse_args():
@@ -35,13 +37,22 @@ class SpinIt:
     
     def _run_model(self, stable_beta_mask, unstable_beta_mask, tree_tensor):
         beta = OctreeTensorHandler.get_beta(tree_tensor)[unstable_beta_mask].double()
-        model = SpinItModel(beta.shape[0]).double()
+        model = SpinItModelYaron(beta)
         opt = self._optimizer(model.parameters())
         iterations = 3 # TODO: change
         model.train()
         for i in range(iterations):
             opt.zero_grad()
-            output = model(beta) #.cuda()
+            s_unstable = tree_tensor[unstable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
+            cells_boundary = tree_tensor[tree_tensor[:,OctreeTensorMapping.LOC]==Location.BOUNDARY]
+            s_boundary = cells_boundary[:,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
+            s_stable = tree_tensor[stable_beta_mask,OctreeTensorMapping.S_1:OctreeTensorMapping.S_ZZ]
+            beta_stable = tree_tensor[stable_beta_mask,OctreeTensorMapping.BETA]
+            s_stable_total = (s_stable.T)*beta_stable
+            if s_stable_total.shape[1]==0:
+                s_stable_total = torch.zeros((1,9))
+            s_rest = s_stable_total.sum(axis=1) + s_boundary.sum(axis=0)
+            output = model(s_unstable, s_rest) #.cuda()
             print(f"iter {i}: {output}")
             loss = self._loss(output, tree_tensor, stable_beta_mask, unstable_beta_mask)
             loss.backward()
@@ -51,15 +62,18 @@ class SpinIt:
     def run(self, mesh_obj: MeshObj):
         tree_tensor = self._octree_obj.build_from_mesh(mesh_obj)
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
+        OctreeTensorHandler.plot_slices(tree_tensor, iteration=-1)
         
         for i in range(10):
-            OctreeTensorHandler.plot_slices(tree_tensor)
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
             tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
             # internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor).float()
             stable_beta_mask, unstable_beta_mask = OctreeTensorHandler.get_interior_beta_mask(
                 tree_tensor, self._epsilon)
             
+            if unstable_beta_mask.sum()==0:
+                print('all betas are stable')
+                break
             if self._opt_name == "adam":
                 optimal_beta = self._run_model(stable_beta_mask, unstable_beta_mask, tree_tensor)
             elif self._opt_name == "nlopt":
@@ -71,7 +85,7 @@ class SpinIt:
             optimal_beta[optimal_beta < self._epsilon] = 0.
             tree_tensor = OctreeTensorHandler.set_beta(tree_tensor, unstable_beta_mask, optimal_beta)
 
-            OctreeTensorHandler.plot_slices(tree_tensor)
+            OctreeTensorHandler.plot_slices(tree_tensor, iteration=i)
 
 
             #split cells with beta inside (eps, 1-eps)
@@ -86,6 +100,8 @@ class SpinIt:
 
             print(f'finished iter {i}. num_of_cells = {tree_tensor.shape[0]}')
 
+        mesh = OctreeTensorHandler.create_mesh(tree_tensor)
+        return mesh
 
 if __name__ == "__main__":
     args = parse_args()
@@ -94,7 +110,7 @@ if __name__ == "__main__":
     
     mesh_obj = MeshObj(**configs.pop("object"))
     spin_it = SpinIt(**configs) #["octree"], configs["optimizer"], configs["loss"], configs["epsilon"], confi)
-    new_obj = spin_it.run(mesh_obj)
+    new_obj_mesh = spin_it.run(mesh_obj)
     
-    output_path = args.file_path # TODO: change to new path
+    # output_path = "output_mesh.stl" # TODO: change to new path
     # save_obj(new_obj, output_path)
