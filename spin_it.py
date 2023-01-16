@@ -54,11 +54,13 @@ class SpinIt:
             s_rest = s_stable_total.sum(axis=1) + s_boundary.sum(axis=0)
             output = model(s_unstable, s_rest) #.cuda()
             loss = self._loss(output, model._beta)
+            if (model._beta>1.).sum() + (model._beta<0.).sum() > 0:
+                break
             loss.backward()
             opt.step()
             print(f"iter {i}: loss={loss.item()}, \nbeta[:10]={model._beta[:10]}")
             # print(f'finished iteration {i}/{iterations}')
-        return output.detach()
+        return model._beta.detach()
     
     def run(self, mesh_obj: MeshObj):
         tree_tensor = self._octree_obj.build_from_mesh(mesh_obj)
