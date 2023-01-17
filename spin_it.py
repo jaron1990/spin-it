@@ -19,11 +19,12 @@ def parse_args():
 
 
 class SpinIt:
-    def __init__(self, octree_configs, optimizer_configs, loss_configs, epsilon) -> None:
+    def __init__(self, octree_configs, optimizer_configs, loss_configs, epsilon, num_of_iters) -> None:
         self._octree_obj = Octree(**octree_configs)
         self._loss = SpinItLoss(**loss_configs)
         self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs, loss_configs)
         self._epsilon = epsilon
+        self._num_of_iters = num_of_iters
     
     def _init_optimizer(self, optimizer_configs, loss_configs):
         name = optimizer_configs["name"].lower()
@@ -67,7 +68,7 @@ class SpinIt:
         tree_tensor = OctreeTensorHandler.set_beta(tree_tensor)
         OctreeTensorHandler.plot_slices(tree_tensor, iteration=-1)
         
-        for i in range(10):
+        for i in range(self._num_of_iters):
             print(f'split_iter: {i}. num_of_cells = {tree_tensor.shape[0]}')
             tree_tensor = OctreeTensorHandler.calc_s_vector(tree_tensor, mesh_obj.rho)
             # internal_beta = OctreeTensorHandler.get_internal_beta(tree_tensor).float()
@@ -115,3 +116,6 @@ if __name__ == "__main__":
     mesh_obj = MeshObj(**configs.pop("object"))
     spin_it = SpinIt(**configs) #["octree"], configs["optimizer"], configs["loss"], configs["epsilon"], confi)
     new_obj_mesh = spin_it.run(mesh_obj)
+
+    # new_obj_mesh.apply_scale(mesh_obj.scale)
+    new_obj_mesh.export('output.stl')

@@ -1,4 +1,5 @@
 epsilon: 0.1
+num_of_iters: 10
 object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
