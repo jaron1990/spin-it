@@ -1,10 +1,6 @@
 import torch
-from octree import Octree, OctreeTensorHandler
-from scipy.optimize import minimize
+from octree import OctreeTensorHandler
 import numpy as np
-from scipy.sparse.csgraph import laplacian
-import matplotlib.pyplot as plt
-from torch.optim import Adam
 import nlopt
 import wandb
 from functools import partial
@@ -98,8 +94,9 @@ class QPOptimizer:
 
         return f_top.item()        
     
-    def __call__(self, beta: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
+    def __call__(self, beta_mask: torch.Tensor, tree_tensor: torch.Tensor) -> torch.Tensor:
         wandb.init(project='spinit', entity="spinit", config={'optimizer': 'nlopt'})
+        beta = tree_tensor[beta_mask, OctreeTensorMapping.BETA]
         self.tree_tensor = tree_tensor
         
         opt = self._opt(len(beta))
@@ -114,6 +111,7 @@ class QPOptimizer:
         opt.set_min_objective(self._loss)
         opt.set_maxeval(len(beta)//2)
         # opt.set_xtol_abs(0.1)
-        return torch.tensor(opt.optimize(beta.numpy()))
+        beta = opt.optimize(beta.numpy())
+        return torch.tensor(beta)
 
 

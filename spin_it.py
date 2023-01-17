@@ -5,9 +5,9 @@ from functools import partial
 from torch.optim import Adam
 from mesh_obj import MeshObj
 from octree import Octree, OctreeTensorHandler
-from loss import SpinItLoss, SpinItLossYaron
+from loss import SpinItLoss
 from optimizer import QPOptimizer
-from model import SpinItModel, SpinItModelYaron
+from model import SpinItModel
 from utils import OctreeTensorMapping, Location
 
 
@@ -21,7 +21,7 @@ def parse_args():
 class SpinIt:
     def __init__(self, octree_configs, optimizer_configs, loss_configs, epsilon) -> None:
         self._octree_obj = Octree(**octree_configs)
-        self._loss = SpinItLossYaron(**loss_configs)
+        self._loss = SpinItLoss(**loss_configs)
         self._optimizer, self._opt_name = self._init_optimizer(optimizer_configs, loss_configs)
         self._epsilon = epsilon
     
@@ -37,7 +37,7 @@ class SpinIt:
     
     def _run_model(self, stable_beta_mask, unstable_beta_mask, tree_tensor):
         beta = OctreeTensorHandler.get_beta(tree_tensor)[unstable_beta_mask].double()
-        model = SpinItModelYaron(beta)
+        model = SpinItModel(beta)
         opt = self._optimizer(model.parameters())
         iterations = 1000 # TODO: change
         model.train()
@@ -80,7 +80,8 @@ class SpinIt:
             if self._opt_name == "adam":
                 optimal_beta = self._run_model(stable_beta_mask, unstable_beta_mask, tree_tensor)
             elif self._opt_name == "nlopt":
-                optimal_beta = self._optimizer(interior_unstable_beta_mask, tree_tensor) # TODO: FIX
+
+                optimal_beta = self._optimizer(unstable_beta_mask, tree_tensor) # TODO: FIX
             else:
                 raise NotImplementedError()
             
@@ -114,6 +115,3 @@ if __name__ == "__main__":
     mesh_obj = MeshObj(**configs.pop("object"))
     spin_it = SpinIt(**configs) #["octree"], configs["optimizer"], configs["loss"], configs["epsilon"], confi)
     new_obj_mesh = spin_it.run(mesh_obj)
-    
-    # output_path = "output_mesh.stl" # TODO: change to new path
-    # save_obj(new_obj, output_path)

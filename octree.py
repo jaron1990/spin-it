@@ -6,8 +6,6 @@ from igl import fast_winding_number_for_meshes
 import matplotlib.pyplot as plt
 from mesh_obj import MeshObj
 from matplotlib.patches import Rectangle
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from mpl_toolkits import mplot3d
 
 
 

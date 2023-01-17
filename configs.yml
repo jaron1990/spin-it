@@ -3,14 +3,14 @@ object:
   mesh_path: "resources/balloon.stl"
   roh: 1. # 1.17 g/cm^3
 octree_configs:
-  init_resolution: 10
-  max_resolution_levels: 3
+  init_resolution: 2
+  max_resolution_levels: 5
 loss_configs:
   phi: 0
   calc_type: "top" # "yoyo"
   gamma_i: 0.9
   gamma_c: 0.7
-  constraints_weights: [1000, 1000, 1000, 1000, 1000]
+  constraints_weights: [1000, 1000, 1000, 1000, 1000, 1000]
 optimizer_configs:
   name: "Adam"
   args:
